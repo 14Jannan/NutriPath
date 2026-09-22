@@ -15,5 +15,4 @@ FoodData Central and Open Food Facts plus a curated Sri Lankan food set.
 
 ## Status
 
-Under active phase-by-phase development. See `docs/` for the architecture
-and roadmap.
+Under active phase-by-phase development. See `docs/phase-0-architecture.md`.
