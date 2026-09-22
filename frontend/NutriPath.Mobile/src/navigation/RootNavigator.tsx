@@ -4,13 +4,15 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { WelcomeScreen } from '@/screens/WelcomeScreen';
 import { CreateAccountScreen } from '@/screens/CreateAccountScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
+import { VerifyOtpScreen } from '@/screens/VerifyOtpScreen';
+import { ForgotPasswordScreen } from '@/screens/ForgotPasswordScreen';
 
 export type RootStackParamList = {
   Welcome: undefined;
   CreateAccount: undefined;
   Login: undefined;
-  VerifyOtp: undefined;   // built in the next screen batch
-  ForgotPassword: undefined; // built in the next screen batch
+  VerifyOtp: { email: string };
+  ForgotPassword: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -31,7 +33,7 @@ export function RootNavigator() {
         <Stack.Screen name="CreateAccount">
           {({ navigation }) => (
             <CreateAccountScreen
-              onAccountCreated={() => navigation.navigate('VerifyOtp')}
+              onAccountCreated={() => navigation.navigate('VerifyOtp', { email: 'kavindi@university.ac.lk' })}
               onGoToLogin={() => navigation.navigate('Login')}
               onGoBack={() => navigation.goBack()}
             />
@@ -41,11 +43,28 @@ export function RootNavigator() {
         <Stack.Screen name="Login">
           {({ navigation }) => (
             <LoginScreen
-              onLoggedIn={() => {
-                /* Phase 5: navigate into the main tab bar instead */
-              }}
+              onLoggedIn={() => {}}
               onGoToCreateAccount={() => navigation.navigate('CreateAccount')}
               onForgotPassword={() => navigation.navigate('ForgotPassword')}
+              onGoBack={() => navigation.goBack()}
+            />
+          )}
+        </Stack.Screen>
+
+        <Stack.Screen name="VerifyOtp">
+          {({ navigation, route }) => (
+            <VerifyOtpScreen
+              email={route.params.email}
+              onVerified={() => navigation.navigate('Login')}
+              onGoBack={() => navigation.goBack()}
+            />
+          )}
+        </Stack.Screen>
+
+        <Stack.Screen name="ForgotPassword">
+          {({ navigation }) => (
+            <ForgotPasswordScreen
+              onCodeSent={() => navigation.navigate('Login')}
               onGoBack={() => navigation.goBack()}
             />
           )}
