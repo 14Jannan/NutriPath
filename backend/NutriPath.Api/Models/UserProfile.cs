@@ -14,6 +14,8 @@ public class UserProfile
     public Guid UserId { get; set; }
     public User? User { get; set; }
 
+    public string FullName { get; set; } = string.Empty;
+
     public int Age { get; set; }
     public Sex Sex { get; set; }
     public decimal HeightCm { get; set; }
