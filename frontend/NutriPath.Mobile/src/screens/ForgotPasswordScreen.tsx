@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TextField } from '@/components/TextField';
 import { Button } from '@/components/Button';
 import { colors, typography, spacing, radii } from '@/theme';
+import * as authApi from '@/api/authApi';
 
 interface ForgotPasswordScreenProps {
   onCodeSent: (email: string) => void;
@@ -14,19 +15,26 @@ interface ForgotPasswordScreenProps {
 export function ForgotPasswordScreen({ onCodeSent, onGoBack }: ForgotPasswordScreenProps) {
   const [email, setEmail] = useState('');
   const [codeRequested, setCodeRequested] = useState(false);
+  const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  function handleSendCode() {
+  async function handleSendCode() {
     if (!email.trim()) {
       Alert.alert('Email required', 'Please enter your registered email.');
       return;
     }
-    // Real "send reset code" call arrives with Phase 5.
-    setCodeRequested(true);
+    try {
+      await authApi.forgotPassword(email);
+      setCodeRequested(true);
+    } catch {
+      // Deliberately vague, matching the backend's own "don't reveal
+      // whether an email exists" principle.
+      setCodeRequested(true);
+    }
   }
 
-  function handleUpdatePassword() {
+  async function handleUpdatePassword() {
     if (newPassword.length < 8) {
       Alert.alert('Password too short', 'Use at least 8 characters.');
       return;
@@ -35,8 +43,14 @@ export function ForgotPasswordScreen({ onCodeSent, onGoBack }: ForgotPasswordScr
       Alert.alert("Passwords don't match", 'Please re-enter matching passwords.');
       return;
     }
-    Alert.alert('Password updated (placeholder)', 'Real reset happens once Phase 5 is wired up.');
-    onCodeSent(email);
+
+    try {
+      await authApi.resetPassword(email, resetCode, newPassword);
+      onCodeSent(email);
+    } catch (error: any) {
+      const message = error.response?.data?.message ?? 'Could not reset password.';
+      Alert.alert('Reset failed', message);
+    }
   }
 
   return (
@@ -74,6 +88,14 @@ export function ForgotPasswordScreen({ onCodeSent, onGoBack }: ForgotPasswordScr
                   A reset code was sent to {email}. Enter your new password below.
                 </Text>
               </View>
+              <TextField
+                label="Reset Code"
+                icon="shield-key-outline"
+                placeholder="6-digit code"
+                keyboardType="number-pad"
+                value={resetCode}
+                onChangeText={setResetCode}
+              />
               <TextField
                 label="New Password"
                 icon="lock-outline"

@@ -10,6 +10,7 @@ import {
 import { Inter_400Regular } from '@expo-google-fonts/inter';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { colors } from '@/theme';
+import { AuthProvider } from '@/context/AuthContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -33,7 +34,9 @@ export default function App() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }} onLayout={onLayoutRootView}>
-      <RootNavigator />
+      <AuthProvider>
+  <RootNavigator />
+</AuthProvider>
     </View>
   );
 }
