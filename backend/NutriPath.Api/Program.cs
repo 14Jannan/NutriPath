@@ -16,6 +16,8 @@ builder.Services.AddSingleton<IHealthService, HealthService>();
 builder.Services.AddDbContext<NutriPathDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
+builder.Services.AddHttpClient<IUsdaFoodSyncService, UsdaFoodSyncService>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())

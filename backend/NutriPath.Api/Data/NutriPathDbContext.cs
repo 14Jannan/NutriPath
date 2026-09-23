@@ -16,6 +16,9 @@ public class NutriPathDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
+    public DbSet<DataSource> DataSources => Set<DataSource>();
+    public DbSet<Food> Foods => Set<Food>();
+    public DbSet<SyncJob> SyncJobs => Set<SyncJob>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -31,5 +34,12 @@ public class NutriPathDbContext : DbContext
             .HasOne(u => u.Profile)
             .WithOne(p => p.User)
             .HasForeignKey<UserProfile>(p => p.UserId);
+
+        // A given external food can only exist once per source — this is the
+// database-level guarantee that re-running a sync never creates duplicates.
+        modelBuilder.Entity<Food>()
+            .HasIndex(f => new { f.DataSourceId, f.ExternalId })
+            .IsUnique();
     }
+    
 }
