@@ -10,6 +10,8 @@ using NutriPath.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
+
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
@@ -39,6 +41,7 @@ builder.Services.AddSingleton<IHealthService, HealthService>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 builder.Services.AddHttpClient<IUsdaFoodSyncService, UsdaFoodSyncService>();
 

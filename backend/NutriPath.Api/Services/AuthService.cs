@@ -50,8 +50,11 @@ public class AuthService : IAuthService
         // No email provider is wired up yet — logging the code is our
         // stand-in so registration is fully testable end to end. This is
         // the one line Phase-later replaces with a real email send.
-        _logger.LogWarning("EMAIL VERIFICATION CODE for {Email}: {Code}", request.Email, code);
-    }
+_logger.LogInformation("Sending verification email to {Email}", request.Email);
+await _emailService.SendAsync(
+    request.Email,
+    "Verify your NutriPath account",
+    $"Your verification code is: {code}\n\nThis code expires in 10 minutes.");    }
 
     public async Task VerifyOtpAsync(VerifyOtpRequest request)
     {
@@ -113,8 +116,10 @@ public class AuthService : IAuthService
         user.PasswordResetCodeExpiresAtUtc = DateTime.UtcNow.AddMinutes(10);
         await _db.SaveChangesAsync();
 
-        _logger.LogWarning("PASSWORD RESET CODE for {Email}: {Code}", request.Email, code);
-    }
+await _emailService.SendAsync(
+    request.Email,
+    "Reset your NutriPath password",
+    $"Your password reset code is: {code}\n\nThis code expires in 10 minutes.");    }
 
     public async Task ResetPasswordAsync(ResetPasswordRequest request)
     {
@@ -157,6 +162,22 @@ public class AuthService : IAuthService
             user.Email,
             user.Profile?.FullName ?? string.Empty);
     }
+
+    private readonly IEmailService _emailService;
+
+public AuthService(
+    NutriPathDbContext db,
+    IPasswordHasher passwordHasher,
+    IJwtTokenService jwtTokenService,
+    IEmailService emailService,
+    ILogger<AuthService> logger)
+{
+    _db = db;
+    _passwordHasher = passwordHasher;
+    _jwtTokenService = jwtTokenService;
+    _emailService = emailService;
+    _logger = logger;
+}
 
     private static string GenerateOtpCode() => Random.Shared.Next(100000, 999999).ToString();
 }

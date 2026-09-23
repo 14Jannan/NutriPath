@@ -15,9 +15,10 @@ import { TextField } from '@/components/TextField';
 import { Chip } from '@/components/Chip';
 import { Button } from '@/components/Button';
 import { colors, typography, spacing, radii } from '@/theme';
+import * as authApi from '@/api/authApi';
 
 interface CreateAccountScreenProps {
-  onAccountCreated: () => void;
+  onAccountCreated: (email: string) => void;
   onGoToLogin: () => void;
   onGoBack: () => void;
 }
@@ -34,10 +35,11 @@ export function CreateAccountScreen({ onAccountCreated, onGoToLogin, onGoBack }:
   const [password, setPassword] = useState('');
   const [dietFocus, setDietFocus] = useState('balanced');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const passwordIsStrong = password.length >= 8 && /[0-9!@#$%^&*]/.test(password);
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!fullName.trim() || !email.trim() || !password) {
       Alert.alert('Missing information', 'Please fill in your name, email, and password.');
       return;
@@ -46,10 +48,17 @@ export function CreateAccountScreen({ onAccountCreated, onGoToLogin, onGoBack }:
       Alert.alert('Terms required', 'Please agree to the Terms of Service and Privacy Policy.');
       return;
     }
-    // Real registration call arrives in Phase 5 — for now this proves the
-    // form, validation, and navigation flow all work end to end.
-    Alert.alert('Account details captured', `Welcome, ${fullName}! (Backend wiring comes in Phase 5.)`);
-    onAccountCreated();
+
+    setIsSubmitting(true);
+    try {
+      await authApi.register(fullName, email, password);
+      onAccountCreated(email);
+    } catch (error: any) {
+      const message = error.response?.data?.message ?? 'Something went wrong. Please try again.';
+      Alert.alert('Registration failed', message);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -147,7 +156,10 @@ export function CreateAccountScreen({ onAccountCreated, onGoToLogin, onGoBack }:
           </Pressable>
 
           <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
-            <Button label="Create Account & Continue" onPress={handleSubmit} />
+            <Button
+              label={isSubmitting ? 'Creating account...' : 'Create Account & Continue'}
+              onPress={handleSubmit}
+            />
             <View style={styles.loginRow}>
               <Text style={styles.loginText}>Already have an account? </Text>
               <Pressable onPress={onGoToLogin}>

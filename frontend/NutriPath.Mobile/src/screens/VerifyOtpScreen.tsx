@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Button } from '@/components/Button';
 import { colors, typography, spacing, radii } from '@/theme';
+import * as authApi from '@/api/authApi';
 
 interface VerifyOtpScreenProps {
   email: string;
@@ -42,22 +43,29 @@ export function VerifyOtpScreen({ email, onVerified, onGoBack }: VerifyOtpScreen
     }
   }
 
-  function handleVerify() {
+  async function handleVerify() {
     const code = digits.join('');
     if (code.length !== CODE_LENGTH) {
       Alert.alert('Incomplete code', 'Please enter all 6 digits.');
       return;
     }
-    // Real verification call arrives with Phase 5's backend.
-    Alert.alert('Code captured', `Verifying ${code} (backend wiring comes in Phase 5).`);
-    onVerified();
+
+    try {
+      await authApi.verifyOtp(email, code);
+      onVerified();
+    } catch (error: any) {
+      const message = error.response?.data?.message ?? 'Verification failed.';
+      Alert.alert('Invalid code', message);
+    }
   }
 
   function handleResend() {
     setSecondsLeft(120);
     setDigits(Array(CODE_LENGTH).fill(''));
     inputRefs.current[0]?.focus();
-    Alert.alert('Code resent', 'A new code would be sent by the backend in Phase 5.');
+    // A dedicated resend-code endpoint doesn't exist yet — flagging the
+    // gap rather than silently pretending this works.
+    Alert.alert('Resend not yet implemented', 'A dedicated resend-code endpoint is a good next addition.');
   }
 
   const minutes = Math.floor(secondsLeft / 60);

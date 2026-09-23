@@ -14,31 +14,41 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TextField } from '@/components/TextField';
 import { Button } from '@/components/Button';
 import { colors, typography, spacing } from '@/theme';
+import { useAuth } from '@/context/AuthContext';
 
 interface LoginScreenProps {
-  onLoggedIn: () => void;
   onGoToCreateAccount: () => void;
   onForgotPassword: () => void;
   onGoBack: () => void;
 }
 
 export function LoginScreen({
-  onLoggedIn,
   onGoToCreateAccount,
   onForgotPassword,
   onGoBack,
 }: LoginScreenProps) {
+  const { loginUser } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!email.trim() || !password) {
       Alert.alert('Missing information', 'Please enter your email and password.');
       return;
     }
-    // Real authentication call arrives in Phase 5 — for now this proves the
-    // form, validation, and navigation flow all work end to end.
-    onLoggedIn();
+
+    setIsSubmitting(true);
+    try {
+      await loginUser(email, password);
+      // No manual navigation needed — RootNavigator watches isLoggedIn
+      // and switches to Home automatically once this resolves.
+    } catch (error: any) {
+      const message = error.response?.data?.message ?? 'Login failed.';
+      Alert.alert('Could not log in', message);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -82,7 +92,7 @@ export function LoginScreen({
           </Pressable>
 
           <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
-            <Button label="Log In" onPress={handleSubmit} />
+            <Button label={isSubmitting ? 'Logging in...' : 'Log In'} onPress={handleSubmit} />
             <View style={styles.signUpRow}>
               <Text style={styles.signUpText}>Don't have an account? </Text>
               <Pressable onPress={onGoToCreateAccount}>
