@@ -23,6 +23,12 @@ public class Food
     public decimal SugarGrams { get; set; }
     public decimal SodiumMilligrams { get; set; }
 
+    // Comma-separated allergen tags (e.g. "peanuts, milk"). USDA search
+    // results don't carry reliable structured allergens, so this is only
+    // filled in for manually curated foods; null means "not tagged", not
+    // "allergen-free".
+    public string? Allergens { get; set; }
+
     public DateTime ImportedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime LastUpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }

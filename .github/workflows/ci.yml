@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The solution includes the test project, so this restores and
+      # builds both. Tests use an in-memory database and a test JWT key,
+      # so no Postgres or secrets are needed on the runner.
+      - name: Restore
+        run: dotnet restore backend/NutriPath.slnx
+
+      - name: Build
+        run: dotnet build backend/NutriPath.slnx --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test tests/NutriPath.Api.Tests/NutriPath.Api.Tests.csproj --no-build --configuration Release
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/NutriPath.Mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/NutriPath.Mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npm test -- --ci

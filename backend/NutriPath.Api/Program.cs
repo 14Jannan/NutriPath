@@ -186,3 +186,7 @@ app.UseRateLimiter();
 app.MapControllers();
 
 app.Run();
+
+// Makes the implicit Program class visible to the test project's
+// WebApplicationFactory<Program>, which boots this app in-memory.
+public partial class Program { }

@@ -113,10 +113,13 @@ public class AiContextBuilder : IAiContextBuilder
             .Take(50)
             .ToListAsync();
 
-        // Simple name match, since foods aren't tagged with structured
-        // allergens yet — a best effort, not a guarantee.
+        // Checks the structured Allergens tags where a food has them, and
+        // falls back to matching the name for untagged (e.g. USDA) foods —
+        // a best effort, not a guarantee.
         return candidates
-            .Where(f => !allergies.Any(a => f.Name.Contains(a, StringComparison.OrdinalIgnoreCase)))
+            .Where(f => !allergies.Any(a =>
+                f.Name.Contains(a, StringComparison.OrdinalIgnoreCase) ||
+                (f.Allergens != null && f.Allergens.Contains(a, StringComparison.OrdinalIgnoreCase))))
             .Take(5)
             .ToList();
     }
@@ -137,7 +140,7 @@ public class AiContextBuilder : IAiContextBuilder
         foreach (var keyword in keywords)
         {
             var matches = await _db.Foods
-                .Where(f => EF.Functions.ILike(f.Name, SearchPatterns.Contains(keyword)))
+                .Where(f => EF.Functions.ILike(f.Name, SearchPatterns.Contains(keyword), SearchPatterns.EscapeCharacter))
                 .Take(3)
                 .ToListAsync();
             results.AddRange(matches);

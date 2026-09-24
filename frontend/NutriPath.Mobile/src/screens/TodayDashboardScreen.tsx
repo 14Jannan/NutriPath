@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import * as nutritionApi from '@/api/nutritionApi';
 import type { DailyNutrition } from '@/api/nutritionApi';
 import { getDailyMeals, type MealGroup } from '@/api/mealsApi';
 import { getMyProfile, type ProfileResponse } from '@/api/profileApi';
+import { addDaysIso, describeDay, todayIso } from '@/utils/date';
 
 function greetingForNow() {
   const hour = new Date().getHours();
@@ -40,13 +41,23 @@ export function TodayDashboardScreen() {
   const [meals, setMeals] = useState<MealGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Local yyyy-MM-dd day being viewed; defaults to today, can step back.
+  const [date, setDate] = useState(todayIso());
+  const isToday = date === todayIso();
 
-  // Refetch every time the tab comes into focus, so a meal logged on
-  // another screen shows up here straight away.
+  function changeDay(days: number) {
+    const next = addDaysIso(date, days);
+    if (next > todayIso()) return; // no future days
+    setLoading(true);
+    setDate(next);
+  }
+
+  // Refetch every time the tab comes into focus (so a meal logged on
+  // another screen shows up straight away) and whenever the day changes.
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      Promise.all([getMyProfile(), nutritionApi.getDailyNutrition(), getDailyMeals()])
+      Promise.all([getMyProfile(), nutritionApi.getDailyNutrition(date), getDailyMeals(date)])
         .then(([p, n, m]) => {
           if (!active) return;
           setProfile(p);
@@ -59,10 +70,11 @@ export function TodayDashboardScreen() {
       return () => {
         active = false;
       };
-    }, [])
+    }, [date])
   );
 
-  const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+  const [y, m, d] = date.split('-').map(Number);
+  const dateLabel = new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
   const firstName = profile?.fullName?.trim().split(' ')[0];
 
   // Every number here is calculated by the backend (NutritionService);
@@ -89,12 +101,25 @@ export function TodayDashboardScreen() {
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.greeting}>
-              {greetingForNow()}
-              {firstName ? `, ${firstName}` : ''}
+              {isToday ? greetingForNow() : describeDay(date)}
+              {isToday && firstName ? `, ${firstName}` : ''}
             </Text>
-            <Text style={styles.date}>{today}</Text>
+            <Text style={styles.date}>{dateLabel}</Text>
+          </View>
+          <View style={styles.dayNav}>
+            <Pressable onPress={() => changeDay(-1)} style={styles.dayButton} accessibilityLabel="Previous day">
+              <MaterialCommunityIcons name="chevron-left" size={24} color={colors.onSurface} />
+            </Pressable>
+            <Pressable
+              onPress={() => changeDay(1)}
+              style={[styles.dayButton, isToday && { opacity: 0.3 }]}
+              disabled={isToday}
+              accessibilityLabel="Next day"
+            >
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.onSurface} />
+            </Pressable>
           </View>
         </View>
 
@@ -102,7 +127,7 @@ export function TodayDashboardScreen() {
 
         {!loading && error && (
           <Card>
-            <Text style={styles.emptyText}>Couldn't load today's data. Check that the backend is running.</Text>
+            <Text style={styles.emptyText}>Couldn't load this day's data. Check that the backend is running.</Text>
           </Card>
         )}
 
@@ -160,7 +185,7 @@ export function TodayDashboardScreen() {
             </Card>
 
             <View style={styles.mealsHeader}>
-              <Text style={styles.cardTitle}>Today's Meals</Text>
+              <Text style={styles.cardTitle}>{isToday ? "Today's Meals" : 'Meals'}</Text>
               <Text style={styles.cardSubtitle}>
                 {loggedCount} of {mealRows.length} logged
               </Text>
@@ -194,6 +219,8 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   content: { padding: spacing.margin, gap: spacing.sm, paddingBottom: spacing.xl },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  dayNav: { flexDirection: 'row' },
+  dayButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   greeting: { ...typography.headlineMd, color: colors.onSurface },
   date: { ...typography.bodySm, color: colors.onSurfaceVariant, marginTop: 2 },
   notice: {
