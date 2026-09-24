@@ -45,10 +45,10 @@ export function AssistantScreen() {
     // what the AI is allowed to say.
     aiApi
       .askAssistant(text)
-      .then((reply) => {
+      .then((response) => {
         setMessages((prev) => [
           ...prev,
-          { id: (Date.now() + 1).toString(), role: 'assistant', text: reply },
+          { id: (Date.now() + 1).toString(), role: 'assistant', text: response.answer },
         ]);
       })
       .catch(() => {
