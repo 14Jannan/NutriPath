@@ -1,7 +1,7 @@
 import { apiClient } from './client';
 
 // These shapes mirror the C# responses exactly — ProfileController's
-// /me payload, DailyTotals, MealResponse and WeeklyScoreResult.
+// /me payload, DailyTotals and WeeklyScoreResult.
 
 export interface MyProfile {
   id: string;
@@ -25,14 +25,8 @@ export interface DailyTotals {
   sodium: number;
 }
 
-// Matches the C# MealType enum order (serialized as a number).
+// Matches the C# MealType enum names, which /api/meals/daily returns as strings.
 export const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'] as const;
-
-export interface MealResponse {
-  mealType: number;
-  items: { foodName: string; servings: number; calories: number; proteinGrams: number }[];
-  totalCalories: number;
-}
 
 export interface WeeklyScore {
   overall: number;
@@ -46,11 +40,6 @@ export async function getMyProfile(): Promise<MyProfile> {
 
 export async function getDailyTotals(): Promise<DailyTotals> {
   const response = await apiClient.get<DailyTotals>('/api/nutrition/daily');
-  return response.data;
-}
-
-export async function getTodayMeals(): Promise<MealResponse[]> {
-  const response = await apiClient.get<MealResponse[]>('/api/meals/today');
   return response.data;
 }
 
