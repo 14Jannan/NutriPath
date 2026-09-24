@@ -40,3 +40,35 @@ export async function updateGoals(payload: UpdateGoalsPayload): Promise<ProfileR
   const res = await apiClient.put<ProfileResponse>('/api/profile/goals', payload);
   return res.data;
 }
+
+// Mirrors GoalsPreviewResponse / ProfileInsightResponse in DTOs/ProfileDtos.cs.
+export interface GoalsPreview {
+  targetCalories: number;
+  targetProteinGrams: number;
+  targetCarbsGrams: number;
+  targetFatGrams: number;
+  targetFiberGrams: number;
+  bmi: number;
+  // WHO adult category; null under 18.
+  bmiCategory: string | null;
+  healthyWeightMinKg: number;
+  healthyWeightMaxKg: number;
+}
+
+export interface ProfileInsight {
+  preview: GoalsPreview;
+  // null when the AI is unavailable (the numbers are still valid).
+  insight: string | null;
+}
+
+// Calculates targets for unsaved values — nothing is stored.
+export async function previewGoals(payload: UpdateGoalsPayload): Promise<GoalsPreview> {
+  const res = await apiClient.post<GoalsPreview>('/api/profile/goals/preview', payload);
+  return res.data;
+}
+
+// The AI's explanation of those targets for this person. Rate limited per user.
+export async function getProfileInsight(payload: UpdateGoalsPayload): Promise<ProfileInsight> {
+  const res = await apiClient.post<ProfileInsight>('/api/profile/insights', payload);
+  return res.data;
+}

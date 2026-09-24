@@ -26,10 +26,63 @@ public class ProfileService : IProfileService
         return ToDto(user);
     }
 
+    public GoalsPreviewResponse Preview(UpdateGoalsRequest request)
+    {
+        // Same validation and formulas as saving, but nothing is stored —
+        // this powers the live preview while the user is still typing.
+        var profile = BuildValidatedProfile(request);
+        CalculateTargets(profile);
+
+        var heightM = (double)profile.HeightCm / 100;
+        var bmi = Math.Round((double)profile.WeightKg / (heightM * heightM), 1);
+        var healthyMin = (int)Math.Round(18.5 * heightM * heightM);
+        var healthyMax = (int)Math.Round(24.9 * heightM * heightM);
+
+        return new GoalsPreviewResponse(
+            profile.TargetCalories, profile.TargetProteinGrams, profile.TargetCarbsGrams,
+            profile.TargetFatGrams, profile.TargetFiberGrams,
+            (decimal)bmi,
+            // Adult BMI categories don't apply under 18 (judged by age percentiles instead).
+            profile.Age >= 18 ? BmiCategory(bmi) : null,
+            healthyMin, healthyMax);
+    }
+
     public async Task<ProfileResponse> UpdateGoalsAsync(Guid userId, UpdateGoalsRequest request)
     {
-        // Out-of-range inputs would otherwise produce a negative BMR and
-        // nonsense targets, so they're rejected before any calculation.
+        var validated = BuildValidatedProfile(request);
+
+        var user = await _db.Users.Include(u => u.Profile).FirstOrDefaultAsync(u => u.Id == userId)
+            ?? throw new InvalidOperationException("User not found.");
+
+        if (user.Profile == null)
+        {
+            user.Profile = new UserProfile { UserId = userId };
+            _db.UserProfiles.Add(user.Profile);
+        }
+
+        var profile = user.Profile;
+        profile.Age = validated.Age;
+        profile.Sex = validated.Sex;
+        profile.HeightCm = validated.HeightCm;
+        profile.WeightKg = validated.WeightKg;
+        profile.ActivityLevel = validated.ActivityLevel;
+        profile.Goal = validated.Goal;
+        profile.Allergies = validated.Allergies;
+        profile.DietaryPreferences = validated.DietaryPreferences;
+
+        CalculateTargets(profile);
+
+        await _db.SaveChangesAsync();
+        return ToDto(user);
+    }
+
+    /// <summary>
+    /// Validates the request and returns an unsaved profile holding its
+    /// values. Out-of-range inputs would otherwise produce a negative BMR
+    /// and nonsense targets, so they're rejected before any calculation.
+    /// </summary>
+    private static UserProfile BuildValidatedProfile(UpdateGoalsRequest request)
+    {
         if (request.Age is < 13 or > 120) throw new ArgumentException("Age must be between 13 and 120.");
         if (request.HeightCm is < 100 or > 250) throw new ArgumentException("Height must be between 100 and 250 cm.");
         if (request.WeightKg is < 25 or > 300) throw new ArgumentException("Weight must be between 25 and 300 kg.");
@@ -48,30 +101,27 @@ public class ProfileService : IProfileService
         if (!Enum.TryParse<NutritionGoal>(request.Goal, ignoreCase: true, out var goal))
             throw new ArgumentException("Goal must be Lose, Maintain or Gain.");
 
-        var user = await _db.Users.Include(u => u.Profile).FirstOrDefaultAsync(u => u.Id == userId)
-            ?? throw new InvalidOperationException("User not found.");
-
-        if (user.Profile == null)
+        return new UserProfile
         {
-            user.Profile = new UserProfile { UserId = userId };
-            _db.UserProfiles.Add(user.Profile);
-        }
-
-        var profile = user.Profile;
-        profile.Age = request.Age;
-        profile.Sex = sex;
-        profile.HeightCm = request.HeightCm;
-        profile.WeightKg = request.WeightKg;
-        profile.ActivityLevel = activityLevel;
-        profile.Goal = goal;
-        profile.Allergies = Clean(request.Allergies);
-        profile.DietaryPreferences = Clean(request.DietaryPreferences);
-
-        CalculateTargets(profile);
-
-        await _db.SaveChangesAsync();
-        return ToDto(user);
+            Age = request.Age,
+            Sex = sex,
+            HeightCm = request.HeightCm,
+            WeightKg = request.WeightKg,
+            ActivityLevel = activityLevel,
+            Goal = goal,
+            Allergies = Clean(request.Allergies),
+            DietaryPreferences = Clean(request.DietaryPreferences),
+        };
     }
+
+    // WHO adult BMI categories.
+    private static string BmiCategory(double bmi) => bmi switch
+    {
+        < 18.5 => "Underweight",
+        < 25 => "Healthy",
+        < 30 => "Overweight",
+        _ => "Obese",
+    };
 
     /// <summary>
     /// Mifflin-St Jeor equation for BMR (calories burned at complete rest),

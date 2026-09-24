@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -13,7 +13,8 @@ import {
   combineKnownAndOther,
   splitKnownAndOther,
 } from '@/components/MultiSelectDropdown';
-import { getMyProfile, updateGoals } from '@/api/profileApi';
+import { getMyProfile, updateGoals, UpdateGoalsPayload } from '@/api/profileApi';
+import { useLiveGoalsAnalysis } from '@/hooks/useLiveGoalsAnalysis';
 import { colors, typography, spacing, radii } from '@/theme';
 import { showAlert } from '@/utils/alert';
 import { bmi, bmiCategory, healthyWeightRange, heightHint, LIMITS, validateBody } from '@/utils/bodyMetrics';
@@ -109,6 +110,29 @@ export function GoalsSetupScreen() {
   const bmiValue = !bodyError && heightValid && weightKg ? bmi(heightNum, weightNum) : null;
   const range = heightValid ? healthyWeightRange(heightNum) : null;
 
+  const allergyList = combineKnownAndOther(allergies, otherAllergies);
+  const preferenceList = combineKnownAndOther(preferences, otherPreferences);
+
+  // Only complete, plausible values are analysed; anything else clears the cards.
+  const livePayload = useMemo<UpdateGoalsPayload | null>(
+    () =>
+      validateBody(ageNum, heightNum, weightNum) === null
+        ? {
+            age: ageNum,
+            sex,
+            heightCm: heightNum,
+            weightKg: weightNum,
+            activityLevel,
+            goal,
+            allergies: allergyList,
+            dietaryPreferences: preferenceList,
+          }
+        : null,
+    // The lists are compared by content, not identity, to avoid re-running every render.
+    [ageNum, heightNum, weightNum, sex, activityLevel, goal, allergyList.join('|'), preferenceList.join('|')]
+  );
+  const { preview, insight, insightLoading, insightError } = useLiveGoalsAnalysis(livePayload);
+
   async function handleSave() {
     if (saving) return;
 
@@ -136,8 +160,8 @@ export function GoalsSetupScreen() {
         weightKg: weightNum,
         activityLevel,
         goal,
-        allergies: combineKnownAndOther(allergies, otherAllergies),
-        dietaryPreferences: combineKnownAndOther(preferences, otherPreferences),
+        allergies: allergyList,
+        dietaryPreferences: preferenceList,
       });
       navigation.goBack();
     } catch (error) {
@@ -248,6 +272,52 @@ export function GoalsSetupScreen() {
             />
           </Card>
 
+          {!livePayload && (
+            <Text style={styles.liveHint}>
+              Fill in your age, height and weight to see your targets and a personalised analysis.
+            </Text>
+          )}
+
+          {livePayload && (
+            <Card style={styles.liveCard}>
+              <View style={styles.liveHeader}>
+                <MaterialCommunityIcons name="target" size={18} color={colors.primary} />
+                <Text style={styles.liveTitle}>Your daily targets</Text>
+              </View>
+              {preview ? (
+                <>
+                  <Text style={styles.liveKcal}>{preview.targetCalories.toLocaleString()} kcal</Text>
+                  <Text style={styles.hint}>
+                    Protein {preview.targetProteinGrams}g · Carbs {preview.targetCarbsGrams}g · Fat{' '}
+                    {preview.targetFatGrams}g · Fibre {preview.targetFiberGrams}g
+                  </Text>
+                </>
+              ) : (
+                <ActivityIndicator color={colors.primary} style={{ alignSelf: 'flex-start', marginTop: spacing.xs }} />
+              )}
+            </Card>
+          )}
+
+          {livePayload && (
+            <Card style={styles.liveCard}>
+              <View style={styles.liveHeader}>
+                <MaterialCommunityIcons name="robot-happy-outline" size={18} color={colors.primary} />
+                <Text style={styles.liveTitle}>AI analysis for you</Text>
+              </View>
+              {insightLoading ? (
+                <View style={styles.liveHeader}>
+                  <ActivityIndicator color={colors.primary} />
+                  <Text style={styles.hint}>Analysing your age, height, weight and goal...</Text>
+                </View>
+              ) : insight ? (
+                <Text style={styles.insightText}>{insight}</Text>
+              ) : (
+                insightError && <Text style={styles.hint}>{insightError}</Text>
+              )}
+              <Text style={styles.disclaimer}>General wellness guidance, not medical advice.</Text>
+            </Card>
+          )}
+
           <Button label={saving ? 'Saving...' : 'Save Goals'} onPress={handleSave} style={{ marginTop: spacing.lg }} />
         </ScrollView>
       )}
@@ -273,6 +343,13 @@ const styles = StyleSheet.create({
     ...typography.bodyMd,
     color: colors.onSurface,
   },
+  liveHint: { ...typography.bodySm, color: colors.onSurfaceVariant, marginTop: spacing.md, textAlign: 'center' },
+  liveCard: { marginTop: spacing.sm, gap: spacing.xs },
+  liveHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  liveTitle: { ...typography.labelLg, color: colors.onSurface },
+  liveKcal: { ...typography.headlineMd, color: colors.primary },
+  insightText: { ...typography.bodyMd, color: colors.onSurface },
+  disclaimer: { ...typography.labelSm, color: colors.outline, marginTop: spacing.xs },
   hint: { ...typography.bodySm, color: colors.onSurfaceVariant, marginTop: 2 },
   bmiLine: { color: colors.primary },
   errorText: { ...typography.bodySm, color: colors.amberCaution, marginTop: 2 },

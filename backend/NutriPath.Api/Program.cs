@@ -17,6 +17,7 @@ builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"
 builder.Services.AddScoped<IFoodSearchService, FoodSearchService>();
 builder.Services.AddScoped<IMealService, MealService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
+builder.Services.AddScoped<IProfileInsightService, ProfileInsightService>();
 builder.Services.AddScoped<INutritionService, NutritionService>();
 
 builder.Services.AddControllers();
@@ -90,6 +91,22 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0, // reject immediately, no queueing
             }));
+
+    // The goals screen asks for a fresh AI insight as values change. The
+    // app debounces and caches, but this caps each user so a runaway
+    // client can't burn through the Groq quota: 10 per minute per user.
+    options.AddPolicy(RateLimitPolicies.AiInsight, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 });
 
