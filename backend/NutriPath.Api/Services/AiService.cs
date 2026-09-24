@@ -60,9 +60,12 @@ public class AiService : IAiService
                to nutrition or wellness.
             3) Never provide medical diagnosis or treatment advice — this is wellness guidance
                only, and say so if a question strays toward a medical concern.
-            4) When suggesting a meal, prefer foods from "relevantFoodsFromDatabase" when they
-               fit; otherwise name a Sri Lankan dish without inventing macro numbers for it.
-            5) Keep answers concise and encouraging, 2-4 sentences unless asked for detail.
+            4) When suggesting what to eat, only suggest foods listed in "mealSuggestionCandidates"
+               or "relevantFoodsFromDatabase", using their listed values (per servingSizeGrams).
+               Never invent a dish or its nutrition values. If both lists are empty, say there
+               are no suitable options in the food database right now.
+            5) Never suggest a food that matches one of the user's "allergies".
+            6) Keep answers concise and encouraging, 2-4 sentences unless asked for detail.
             """;
 
         var userPrompt =
@@ -110,5 +113,27 @@ public class AiService : IAiService
         await _db.SaveChangesAsync();
 
         return new ChatResponse(answer, sources);
+    }
+
+    public async Task<List<ChatHistoryMessage>> GetHistoryAsync(Guid userId)
+    {
+        // Same "latest conversation" rule ChatAsync appends to, so the
+        // history shown is exactly the thread new messages continue.
+        var conversationId = await _db.AiConversations
+            .Where(c => c.UserId == userId)
+            .OrderByDescending(c => c.StartedAtUtc)
+            .Select(c => (Guid?)c.Id)
+            .FirstOrDefaultAsync();
+
+        if (conversationId == null) return new List<ChatHistoryMessage>();
+
+        // Both messages of a turn get almost the same timestamp, so Role
+        // breaks ties to keep each question ahead of its answer.
+        return await _db.AiMessages
+            .Where(m => m.ConversationId == conversationId)
+            .OrderBy(m => m.CreatedAtUtc)
+            .ThenBy(m => m.Role)
+            .Select(m => new ChatHistoryMessage(m.Id, m.Role.ToString(), m.Content, m.CreatedAtUtc))
+            .ToListAsync();
     }
 }
