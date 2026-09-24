@@ -63,6 +63,13 @@ public class AiContextBuilder : IAiContextBuilder
             },
             weeklyScore = weeklyScore == null ? null : new
             {
+                // Without this, the model has misread "Sugar: 100" as "too
+                // much sugar" when it actually means no penalty at all.
+                howToRead = "All scores are 0-100 where HIGHER IS BETTER. For Sugar and Sodium, 100 means " +
+                            "the average stayed within the healthy limit; lower means it went over. For the " +
+                            "others, 100 means the daily target was met. A score of 0 for Calories, Protein or " +
+                            "Fiber when the matching daily target is 0 means the target hasn't been set yet. " +
+                            "Consistency is the share of the last 7 days with at least one meal logged.",
                 overall = weeklyScore.Overall,
                 components = weeklyScore.Components.Select(c => new { c.Name, c.Percent }),
             },
