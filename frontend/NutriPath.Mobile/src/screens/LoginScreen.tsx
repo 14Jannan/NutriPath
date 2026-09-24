@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -14,6 +13,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TextField } from '@/components/TextField';
 import { Button } from '@/components/Button';
 import { colors, typography, spacing } from '@/theme';
+import { showAlert } from '@/utils/alert';
 import { useAuth } from '@/context/AuthContext';
 
 interface LoginScreenProps {
@@ -34,7 +34,7 @@ export function LoginScreen({
 
   async function handleSubmit() {
     if (!email.trim() || !password) {
-      Alert.alert('Missing information', 'Please enter your email and password.');
+      showAlert('Missing information', 'Please enter your email and password.');
       return;
     }
 
@@ -45,7 +45,7 @@ export function LoginScreen({
       // and switches to Home automatically once this resolves.
     } catch (error: any) {
       const message = error.response?.data?.message ?? 'Login failed.';
-      Alert.alert('Could not log in', message);
+      showAlert('Could not log in', message);
     } finally {
       setIsSubmitting(false);
     }
