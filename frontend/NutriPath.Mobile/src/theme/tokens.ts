@@ -18,9 +18,11 @@ export const colors = {
   onSecondaryFixed: '#002018',
   outline: '#717975',
   emerald: '#10B981',
+  amberCaution: '#B45309',
 } as const;
 
 export const typography = {
+  displayLg: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 40, lineHeight: 48 },
   headlineLg: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 28, lineHeight: 36 },
   headlineMd: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 22, lineHeight: 28 },
   labelLg: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 14, lineHeight: 18 },
@@ -36,6 +38,7 @@ export const spacing = {
   sm: 8,
   md: 16,
   lg: 24,
+  xl: 32,
 } as const;
 
 export const radii = {
