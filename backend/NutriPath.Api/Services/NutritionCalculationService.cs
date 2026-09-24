@@ -12,7 +12,6 @@ public class NutritionCalculationService : INutritionCalculationService
     public async Task<DailyTotals> GetDailyTotalsAsync(Guid userId, DateOnly date)
     {
         var items = await _db.MealItems
-            .Include(i => i.Food)
             .Where(i => i.Meal!.UserId == userId && i.Meal.Date == date)
             .ToListAsync();
 
@@ -20,13 +19,15 @@ public class NutritionCalculationService : INutritionCalculationService
         // table (as Phase 0's ERD sketched). At this data volume, summing
         // a handful of rows is fast enough that caching would be premature
         // optimization — worth adding only if this query gets measurably slow.
+        // Sums the snapshots, not the live Food values, so a re-sync that
+        // corrects a food never rewrites a past day's totals.
         return new DailyTotals(
-            items.Sum(i => i.Food!.Calories * i.Servings),
-            items.Sum(i => i.Food!.ProteinGrams * i.Servings),
-            items.Sum(i => i.Food!.CarbsGrams * i.Servings),
-            items.Sum(i => i.Food!.FatGrams * i.Servings),
-            items.Sum(i => i.Food!.FiberGrams * i.Servings),
-            items.Sum(i => i.Food!.SugarGrams * i.Servings),
-            items.Sum(i => i.Food!.SodiumMilligrams * i.Servings));
+            items.Sum(i => i.CaloriesSnapshot),
+            items.Sum(i => i.ProteinGramsSnapshot),
+            items.Sum(i => i.CarbsGramsSnapshot),
+            items.Sum(i => i.FatGramsSnapshot),
+            items.Sum(i => i.FiberGramsSnapshot),
+            items.Sum(i => i.SugarGramsSnapshot),
+            items.Sum(i => i.SodiumMilligramsSnapshot));
     }
 }
