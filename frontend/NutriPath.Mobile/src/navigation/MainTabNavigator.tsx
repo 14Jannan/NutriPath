@@ -5,7 +5,7 @@ import { TodayDashboardScreen } from '@/screens/TodayDashboardScreen';
 import { LogStackNavigator } from '@/navigation/LogStackNavigator';
 import { WeeklyScoreScreen } from '@/screens/WeeklyScoreScreen';
 import { AssistantScreen } from '@/screens/AssistantScreen';
-import { ProfileScreen } from '@/screens/ProfileScreen';
+import { ProfileStackNavigator } from '@/navigation/ProfileStackNavigator';
 import { colors } from '@/theme';
 
 export type MainTabParamList = {
@@ -42,7 +42,7 @@ export function MainTabNavigator() {
       <Tab.Screen name="Log" component={LogStackNavigator} />
       <Tab.Screen name="Score" component={WeeklyScoreScreen} />
       <Tab.Screen name="Assistant" component={AssistantScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Profile" component={ProfileStackNavigator} />
     </Tab.Navigator>
   );
 }
