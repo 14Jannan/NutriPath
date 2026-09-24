@@ -19,6 +19,9 @@ public class NutriPathDbContext : DbContext
     public DbSet<DataSource> DataSources => Set<DataSource>();
     public DbSet<Food> Foods => Set<Food>();
     public DbSet<SyncJob> SyncJobs => Set<SyncJob>();
+    public DbSet<Meal> Meals => Set<Meal>();
+    public DbSet<MealItem> MealItems => Set<MealItem>();
+    public DbSet<AiMessage> AiMessages => Set<AiMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -40,6 +43,14 @@ public class NutriPathDbContext : DbContext
         modelBuilder.Entity<Food>()
             .HasIndex(f => new { f.DataSourceId, f.ExternalId })
             .IsUnique();
+
+        // One Meal has many MealItems. Naming the MealItem.Meal navigation
+        // here ties both sides to the same MealId foreign key — without it,
+        // EF would infer a second relationship and add a shadow MealId1.
+        modelBuilder.Entity<Meal>()
+            .HasMany(m => m.Items)
+            .WithOne(mi => mi.Meal)
+            .HasForeignKey(mi => mi.MealId);
     }
-    
+
 }
