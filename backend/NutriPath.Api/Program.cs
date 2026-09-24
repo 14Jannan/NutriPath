@@ -37,6 +37,14 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+builder.Services.AddCors(options =>
+{
+    // Dev-only: the mobile app is requested from a browser (web target),
+    // an emulator, or a phone on the LAN, each a different origin. Auth
+    // uses a Bearer header, not cookies, so AllowAnyOrigin is safe here.
+    options.AddDefaultPolicy(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+});
+
 builder.Services.AddSingleton<IHealthService, HealthService>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -78,6 +86,12 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// CORS must run before Authentication/Authorization and before
+// MapControllers — otherwise the browser's preflight (OPTIONS) request
+// never gets an Access-Control-Allow-Origin header and every
+// cross-origin call from the web app is silently blocked.
+app.UseCors();
 
 // Authentication must run BEFORE Authorization: authentication figures
 // out WHO is calling (validates the token, builds the User object);

@@ -37,7 +37,8 @@ export function WelcomeScreen({ onGetStarted, onLogIn }: WelcomeScreenProps) {
         {/* Hero image card */}
         <View style={styles.heroCard}>
           <View style={styles.heroImageWrap}>
-<Image source={require('../../assets/images/welcome-hero.jpg')} style={styles.heroImage} resizeMode="cover" />            <View style={styles.freshTag}>
+            <Image source={require('../../assets/images/welcome-hero.jpg')} style={styles.heroImage} resizeMode="cover" />
+            <View style={styles.freshTag}>
               <View style={styles.pulseDot} />
               <Text style={styles.freshTagText}>Island Fresh Insights</Text>
             </View>

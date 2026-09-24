@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/api/tokenStorage';
 import { ACCESS_TOKEN_KEY } from '@/api/client';
 import * as authApi from '@/api/authApi';
 

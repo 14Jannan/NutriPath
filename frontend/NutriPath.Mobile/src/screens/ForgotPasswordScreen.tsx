@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TextField } from '@/components/TextField';
 import { Button } from '@/components/Button';
 import { colors, typography, spacing, radii } from '@/theme';
+import { showAlert } from '@/utils/alert';
 import * as authApi from '@/api/authApi';
 
 interface ForgotPasswordScreenProps {
@@ -21,7 +22,7 @@ export function ForgotPasswordScreen({ onCodeSent, onGoBack }: ForgotPasswordScr
 
   async function handleSendCode() {
     if (!email.trim()) {
-      Alert.alert('Email required', 'Please enter your registered email.');
+      showAlert('Email required', 'Please enter your registered email.');
       return;
     }
     try {
@@ -36,11 +37,11 @@ export function ForgotPasswordScreen({ onCodeSent, onGoBack }: ForgotPasswordScr
 
   async function handleUpdatePassword() {
     if (newPassword.length < 8) {
-      Alert.alert('Password too short', 'Use at least 8 characters.');
+      showAlert('Password too short', 'Use at least 8 characters.');
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert("Passwords don't match", 'Please re-enter matching passwords.');
+      showAlert("Passwords don't match", 'Please re-enter matching passwords.');
       return;
     }
 
@@ -49,7 +50,7 @@ export function ForgotPasswordScreen({ onCodeSent, onGoBack }: ForgotPasswordScr
       onCodeSent(email);
     } catch (error: any) {
       const message = error.response?.data?.message ?? 'Could not reset password.';
-      Alert.alert('Reset failed', message);
+      showAlert('Reset failed', message);
     }
   }
 

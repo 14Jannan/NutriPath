@@ -1,5 +1,5 @@
 import { apiClient, ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from './client';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from './tokenStorage';
 
 // These shapes mirror the C# records in DTOs/AuthDtos.cs exactly.
 // Keeping them in sync by hand is a real maintenance cost worth naming

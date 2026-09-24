@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Button } from '@/components/Button';
 import { colors, typography, spacing, radii } from '@/theme';
+import { showAlert } from '@/utils/alert';
 import * as authApi from '@/api/authApi';
 
 interface VerifyOtpScreenProps {
@@ -46,7 +47,7 @@ export function VerifyOtpScreen({ email, onVerified, onGoBack }: VerifyOtpScreen
   async function handleVerify() {
     const code = digits.join('');
     if (code.length !== CODE_LENGTH) {
-      Alert.alert('Incomplete code', 'Please enter all 6 digits.');
+      showAlert('Incomplete code', 'Please enter all 6 digits.');
       return;
     }
 
@@ -55,7 +56,7 @@ export function VerifyOtpScreen({ email, onVerified, onGoBack }: VerifyOtpScreen
       onVerified();
     } catch (error: any) {
       const message = error.response?.data?.message ?? 'Verification failed.';
-      Alert.alert('Invalid code', message);
+      showAlert('Invalid code', message);
     }
   }
 
@@ -65,7 +66,7 @@ export function VerifyOtpScreen({ email, onVerified, onGoBack }: VerifyOtpScreen
     inputRefs.current[0]?.focus();
     // A dedicated resend-code endpoint doesn't exist yet — flagging the
     // gap rather than silently pretending this works.
-    Alert.alert('Resend not yet implemented', 'A dedicated resend-code endpoint is a good next addition.');
+    showAlert('Resend not yet implemented', 'A dedicated resend-code endpoint is a good next addition.');
   }
 
   const minutes = Math.floor(secondsLeft / 60);

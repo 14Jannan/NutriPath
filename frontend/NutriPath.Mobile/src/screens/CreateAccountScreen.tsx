@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -15,6 +14,7 @@ import { TextField } from '@/components/TextField';
 import { Chip } from '@/components/Chip';
 import { Button } from '@/components/Button';
 import { colors, typography, spacing, radii } from '@/theme';
+import { showAlert } from '@/utils/alert';
 import * as authApi from '@/api/authApi';
 
 interface CreateAccountScreenProps {
@@ -41,11 +41,11 @@ export function CreateAccountScreen({ onAccountCreated, onGoToLogin, onGoBack }:
 
   async function handleSubmit() {
     if (!fullName.trim() || !email.trim() || !password) {
-      Alert.alert('Missing information', 'Please fill in your name, email, and password.');
+      showAlert('Missing information', 'Please fill in your name, email, and password.');
       return;
     }
     if (!agreedToTerms) {
-      Alert.alert('Terms required', 'Please agree to the Terms of Service and Privacy Policy.');
+      showAlert('Terms required', 'Please agree to the Terms of Service and Privacy Policy.');
       return;
     }
 
@@ -55,7 +55,7 @@ export function CreateAccountScreen({ onAccountCreated, onGoToLogin, onGoBack }:
       onAccountCreated(email);
     } catch (error: any) {
       const message = error.response?.data?.message ?? 'Something went wrong. Please try again.';
-      Alert.alert('Registration failed', message);
+      showAlert('Registration failed', message);
     } finally {
       setIsSubmitting(false);
     }
