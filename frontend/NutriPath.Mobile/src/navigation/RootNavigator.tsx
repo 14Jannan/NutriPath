@@ -7,7 +7,7 @@ import { CreateAccountScreen } from '@/screens/CreateAccountScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
 import { VerifyOtpScreen } from '@/screens/VerifyOtpScreen';
 import { ForgotPasswordScreen } from '@/screens/ForgotPasswordScreen';
-import { HomeScreen } from '@/screens/HomeScreen';
+import { MainTabNavigator } from '@/navigation/MainTabNavigator';
 import { useAuth } from '@/context/AuthContext';
 import { colors } from '@/theme';
 
@@ -34,7 +34,7 @@ export function RootNavigator() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isLoggedIn ? (
-          <Stack.Screen name="Home" component={HomeScreen} />
+          <Stack.Screen name="Home" component={MainTabNavigator} />
         ) : (
           <>
             <Stack.Screen name="Welcome">
