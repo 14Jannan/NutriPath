@@ -1,5 +1,7 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using NutriPath.Api;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -14,6 +16,8 @@ builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Emai
 builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"));
 builder.Services.AddScoped<IFoodSearchService, FoodSearchService>();
 builder.Services.AddScoped<IMealService, MealService>();
+builder.Services.AddScoped<IProfileService, ProfileService>();
+builder.Services.AddScoped<INutritionService, NutritionService>();
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
@@ -41,10 +45,40 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddCors(options =>
 {
-    // Dev-only: the mobile app is requested from a browser (web target),
-    // an emulator, or a phone on the LAN, each a different origin. Auth
-    // uses a Bearer header, not cookies, so AllowAnyOrigin is safe here.
-    options.AddDefaultPolicy(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+    options.AddDefaultPolicy(policy =>
+    {
+        if (builder.Environment.IsDevelopment())
+        {
+            // The mobile app is requested from a browser (web target), an
+            // emulator, or a phone on the LAN, each a different origin. Auth
+            // uses a Bearer header, not cookies, so AllowAnyOrigin is safe here.
+            policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+        }
+        else
+        {
+            // Set to the real deployed frontend origin at deployment time.
+            policy.WithOrigins(builder.Configuration["AllowedOrigin"] ?? "https://nutripath.app")
+                .AllowAnyMethod()
+                .AllowAnyHeader();
+        }
+    });
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    // Brute-force protection for login, register and OTP/reset codes:
+    // 5 attempts per minute PER CLIENT IP. A single shared window would
+    // let one attacker lock every user out of logging in.
+    options.AddPolicy(RateLimitPolicies.Auth, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0, // reject immediately, no queueing
+            }));
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 });
 
 builder.Services.AddSingleton<IHealthService, HealthService>();
@@ -134,6 +168,8 @@ app.UseCors();
 // Authorization would run with no identity to check yet.
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseRateLimiter();
 
 app.MapControllers();
 

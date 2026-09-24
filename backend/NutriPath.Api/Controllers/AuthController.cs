@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using NutriPath.Api.DTOs;
 using NutriPath.Api.Services;
 
@@ -6,6 +7,7 @@ namespace NutriPath.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableRateLimiting(RateLimitPolicies.Auth)]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
@@ -57,7 +59,10 @@ public class AuthController : ControllerBase
         }
     }
 
+    // Refresh tokens are long random values that can't be guessed, and the
+    // app calls this automatically, so it's exempt from the auth limit.
     [HttpPost("refresh")]
+    [DisableRateLimiting]
     public async Task<IActionResult> Refresh([FromBody] RefreshRequest request)
     {
         try
