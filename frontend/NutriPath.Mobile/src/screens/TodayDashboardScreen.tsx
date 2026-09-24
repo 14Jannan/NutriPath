@@ -8,7 +8,8 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { CircularProgress } from '@/components/CircularProgress';
 import { colors, typography, spacing, radii } from '@/theme';
 import * as nutritionApi from '@/api/nutritionApi';
-import type { DailyTotals, MealResponse, MyProfile } from '@/api/nutritionApi';
+import type { DailyTotals, MyProfile } from '@/api/nutritionApi';
+import { getDailyMeals, type MealGroup } from '@/api/mealsApi';
 
 function greetingForNow() {
   const hour = new Date().getHours();
@@ -28,7 +29,7 @@ const round = (value: number) => Math.round(value);
 export function TodayDashboardScreen() {
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [totals, setTotals] = useState<DailyTotals | null>(null);
-  const [meals, setMeals] = useState<MealResponse[]>([]);
+  const [meals, setMeals] = useState<MealGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -37,12 +38,12 @@ export function TodayDashboardScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      Promise.all([nutritionApi.getMyProfile(), nutritionApi.getDailyTotals(), nutritionApi.getTodayMeals()])
+      Promise.all([nutritionApi.getMyProfile(), nutritionApi.getDailyTotals(), getDailyMeals()])
         .then(([p, t, m]) => {
           if (!active) return;
           setProfile(p);
           setTotals(t);
-          setMeals(m);
+          setMeals(m.meals);
           setError(false);
         })
         .catch(() => active && setError(true))
@@ -67,8 +68,8 @@ export function TodayDashboardScreen() {
     { key: 'fibre', label: 'Fibre', icon: 'leaf' as const, current: totals?.fiber ?? 0, target: profile?.targetFiberGrams ?? 0 },
   ];
 
-  const mealRows = nutritionApi.MEAL_TYPES.map((label, type) => {
-    const meal = meals.find((m) => m.mealType === type);
+  const mealRows = nutritionApi.MEAL_TYPES.map((label) => {
+    const meal = meals.find((m) => m.mealType === label);
     return { label, meal };
   });
   const loggedCount = mealRows.filter((row) => row.meal).length;
