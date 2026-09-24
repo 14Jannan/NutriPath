@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { WelcomeScreen } from '@/screens/WelcomeScreen';
@@ -8,8 +9,10 @@ import { LoginScreen } from '@/screens/LoginScreen';
 import { VerifyOtpScreen } from '@/screens/VerifyOtpScreen';
 import { ForgotPasswordScreen } from '@/screens/ForgotPasswordScreen';
 import { MainTabNavigator } from '@/navigation/MainTabNavigator';
+import { OnboardingScreen } from '@/screens/OnboardingScreen';
+import { Button } from '@/components/Button';
 import { useAuth } from '@/context/AuthContext';
-import { colors } from '@/theme';
+import { colors, spacing, typography } from '@/theme';
 
 export type RootStackParamList = {
   Welcome: undefined;
@@ -17,24 +20,54 @@ export type RootStackParamList = {
   Login: undefined;
   VerifyOtp: { email: string };
   ForgotPassword: undefined;
+  Onboarding: undefined;
   Home: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export function RootNavigator() {
-  const { isLoggedIn, isLoading } = useAuth();
+/** Shown if we couldn't check whether setup is finished (e.g. offline). */
+function ProfileCheckFailed() {
+  const { refreshProfileStatus, logoutUser } = useAuth();
+  return (
+    <View style={styles.center}>
+      <MaterialCommunityIcons name="wifi-off" size={40} color={colors.outline} />
+      <Text style={styles.title}>Can't reach NutriPath</Text>
+      <Text style={styles.body}>Check your connection and that the backend is running, then try again.</Text>
+      <Button label="Try again" onPress={refreshProfileStatus} style={{ marginTop: spacing.md, maxWidth: 320 }} />
+      <Button label="Log out" variant="secondary" onPress={logoutUser} style={{ marginTop: spacing.sm, maxWidth: 320 }} />
+    </View>
+  );
+}
 
-  if (isLoading) {
-    // Brief moment while we check SecureStore for an existing session.
-    return <View style={{ flex: 1, backgroundColor: colors.surface }} />;
+export function RootNavigator() {
+  const { isLoggedIn, isLoading, profileStatus } = useAuth();
+
+  if (isLoading || (isLoggedIn && profileStatus === 'checking')) {
+    // Brief moment while we check for a saved session and, once logged
+    // in, whether the required profile setup has been completed.
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
+
+  if (isLoggedIn && profileStatus === 'error') {
+    return <ProfileCheckFailed />;
   }
 
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isLoggedIn ? (
-          <Stack.Screen name="Home" component={MainTabNavigator} />
+          // Setup is mandatory: until the profile is saved, the setup
+          // wizard is the only screen, so there's nothing to skip to.
+          profileStatus === 'incomplete' ? (
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+          ) : (
+            <Stack.Screen name="Home" component={MainTabNavigator} />
+          )
         ) : (
           <>
             <Stack.Screen name="Welcome">
@@ -86,3 +119,16 @@ export function RootNavigator() {
     </NavigationContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  center: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.margin,
+    gap: spacing.xs,
+  },
+  title: { ...typography.headlineMd, color: colors.onSurface, textAlign: 'center', marginTop: spacing.sm },
+  body: { ...typography.bodyMd, color: colors.onSurfaceVariant, textAlign: 'center', maxWidth: 360 },
+});

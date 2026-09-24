@@ -15,26 +15,16 @@ import {
 import { getMyProfile, updateGoals, UpdateGoalsPayload } from '@/api/profileApi';
 import { describeApiError } from '@/api/client';
 import { useLiveGoalsAnalysis } from '@/hooks/useLiveGoalsAnalysis';
+import { ACTIVITY_OPTIONS, ALLERGY_OPTIONS, DIET_OPTIONS, GOAL_OPTIONS, SEX_OPTIONS } from '@/constants/profileOptions';
 import { colors, typography, spacing, radii } from '@/theme';
 import { showAlert } from '@/utils/alert';
 import { bmi, bmiCategory, healthyWeightRange, heightHint, LIMITS, validateBody } from '@/utils/bodyMetrics';
 
-const SEXES = ['Male', 'Female', 'Other'];
-const ACTIVITY_LEVELS = ['Sedentary', 'Light', 'Moderate', 'VeryActive'];
+// Plain value lists for the compact segmented rows on this edit screen.
+const SEXES = SEX_OPTIONS.map((o) => o.value);
+const ACTIVITY_LEVELS = ACTIVITY_OPTIONS.map((o) => o.value);
 const ACTIVITY_LABELS: Record<string, string> = { VeryActive: 'Very active' };
-const GOALS = ['Lose', 'Maintain', 'Gain'];
-
-// The most common food allergens. Names are kept close to how foods are
-// named, since the assistant filters suggestions by matching them.
-const ALLERGY_OPTIONS = [
-  NONE_OPTION, 'Peanuts', 'Tree nuts', 'Milk', 'Eggs', 'Fish', 'Shellfish',
-  'Wheat', 'Gluten', 'Soy', 'Sesame', OTHER_OPTION,
-] as const;
-
-const DIET_OPTIONS = [
-  NONE_OPTION, 'Vegetarian', 'Vegan', 'Pescatarian', 'Halal', 'No beef', 'No pork',
-  'Lactose-free', 'Gluten-free', 'Low sugar', OTHER_OPTION,
-] as const;
+const GOALS = GOAL_OPTIONS.map((o) => o.value);
 
 function SegmentedRow({
   options,
