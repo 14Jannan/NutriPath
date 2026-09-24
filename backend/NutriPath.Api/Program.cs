@@ -12,7 +12,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
 builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"));
-
+builder.Services.AddScoped<IFoodSearchService, FoodSearchService>();
+builder.Services.AddScoped<IMealService, MealService>();
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
