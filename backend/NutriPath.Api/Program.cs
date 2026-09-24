@@ -11,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
+builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"));
 
 
 builder.Services.AddControllers();
@@ -51,7 +52,13 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 
+builder.Services.AddScoped<INutritionCalculationService, NutritionCalculationService>();
+builder.Services.AddScoped<IWeeklyScoreService, WeeklyScoreService>();
+builder.Services.AddScoped<IAiContextBuilder, AiContextBuilder>();
+builder.Services.AddScoped<IAiService, AiService>();
+
 builder.Services.AddHttpClient<IUsdaFoodSyncService, UsdaFoodSyncService>();
+builder.Services.AddHttpClient<IGroqClient, GroqClient>();
 
 builder.Services.AddDbContext<NutriPathDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
