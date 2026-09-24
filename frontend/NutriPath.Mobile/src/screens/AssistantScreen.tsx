@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -32,6 +32,30 @@ const initialMessages: ChatMessage[] = [
 export function AssistantScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState('');
+
+  // Load the saved conversation once. Tab screens stay mounted, so this
+  // doesn't re-run on every tab switch; after it, the live `messages`
+  // state is the source of truth for the rest of the session.
+  useEffect(() => {
+    let active = true;
+    aiApi
+      .getChatHistory()
+      .then((history) => {
+        if (!active || history.length === 0) return; // brand-new users keep the welcome message
+        const saved: ChatMessage[] = history.map((h) => ({
+          id: h.id,
+          role: h.role.toLowerCase() === 'user' ? 'user' : 'assistant',
+          text: h.content,
+        }));
+        // Keep anything sent while history was loading, after the saved
+        // thread; drop the canned welcome now that real history exists.
+        setMessages((prev) => [...saved, ...prev.filter((m) => !initialMessages.includes(m))]);
+      })
+      .catch(() => {}); // history is a nicety — chat still works without it
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function sendMessage(text: string) {
     if (!text.trim()) return;
