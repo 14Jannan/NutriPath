@@ -10,10 +10,10 @@ namespace NutriPath.Api.Controllers;
 [Authorize]
 public class NutritionController : ControllerBase
 {
-    private readonly INutritionCalculationService _nutritionService;
+    private readonly INutritionService _nutritionService;
     private readonly IWeeklyScoreService _weeklyScoreService;
 
-    public NutritionController(INutritionCalculationService nutritionService, IWeeklyScoreService weeklyScoreService)
+    public NutritionController(INutritionService nutritionService, IWeeklyScoreService weeklyScoreService)
     {
         _nutritionService = nutritionService;
         _weeklyScoreService = weeklyScoreService;
@@ -21,19 +21,19 @@ public class NutritionController : ControllerBase
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    // GET /api/nutrition/daily
+    // GET /api/nutrition/daily?date=2026-09-24
     [HttpGet("daily")]
-    public async Task<IActionResult> GetDaily()
+    public async Task<IActionResult> GetDaily([FromQuery] DateOnly? date)
     {
-        var totals = await _nutritionService.GetDailyTotalsAsync(CurrentUserId, DateOnly.FromDateTime(DateTime.UtcNow));
-        return Ok(totals);
+        var result = await _nutritionService.GetDailySummaryAsync(CurrentUserId, date ?? DateOnly.FromDateTime(DateTime.UtcNow));
+        return Ok(result);
     }
 
     // GET /api/nutrition/weekly-score
     [HttpGet("weekly-score")]
     public async Task<IActionResult> GetWeeklyScore()
     {
-        var result = await _weeklyScoreService.CalculateAsync(CurrentUserId);
+        var result = await _weeklyScoreService.GetCurrentWeekScoreAsync(CurrentUserId);
         return Ok(result);
     }
 }

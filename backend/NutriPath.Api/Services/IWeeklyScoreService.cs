@@ -1,9 +1,8 @@
-namespace NutriPath.Api.Services;
+using NutriPath.Api.DTOs;
 
-public record ComponentScore(string Name, int Percent);
-public record WeeklyScoreResult(int Overall, List<ComponentScore> Components);
+namespace NutriPath.Api.Services;
 
 public interface IWeeklyScoreService
 {
-    Task<WeeklyScoreResult> CalculateAsync(Guid userId);
+    Task<WeeklyScoreResponse> GetCurrentWeekScoreAsync(Guid userId);
 }

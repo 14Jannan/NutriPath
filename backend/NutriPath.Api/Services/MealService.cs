@@ -44,28 +44,27 @@ public class MealService : IMealService
         }
 
         // Scale the food's per-serving nutrients to the actual quantity
-        // logged. Foods are stored per ServingSizeGrams (e.g. per 100g);
-        // if someone logs 150g of a food stored per 100g, every nutrient
-        // scales by 150/100 = 1.5x.
+        // logged (see NutrientScaling).
         if (food.ServingSizeGrams <= 0)
         {
             throw new InvalidOperationException("This food has no valid serving size and can't be logged.");
         }
 
-        var scale = request.QuantityGrams / food.ServingSizeGrams;
+        decimal Scale(decimal perServing) =>
+            NutrientScaling.Scale(perServing, food.ServingSizeGrams, request.QuantityGrams);
 
         var mealItem = new MealItem
         {
             MealId = meal.Id,
             FoodId = food.Id,
             QuantityGrams = request.QuantityGrams,
-            CaloriesSnapshot = Math.Round(food.Calories * scale, 1),
-            ProteinGramsSnapshot = Math.Round(food.ProteinGrams * scale, 1),
-            CarbsGramsSnapshot = Math.Round(food.CarbsGrams * scale, 1),
-            FatGramsSnapshot = Math.Round(food.FatGrams * scale, 1),
-            FiberGramsSnapshot = Math.Round(food.FiberGrams * scale, 1),
-            SugarGramsSnapshot = Math.Round(food.SugarGrams * scale, 1),
-            SodiumMilligramsSnapshot = Math.Round(food.SodiumMilligrams * scale, 1),
+            CaloriesSnapshot = Scale(food.Calories),
+            ProteinGramsSnapshot = Scale(food.ProteinGrams),
+            CarbsGramsSnapshot = Scale(food.CarbsGrams),
+            FatGramsSnapshot = Scale(food.FatGrams),
+            FiberGramsSnapshot = Scale(food.FiberGrams),
+            SugarGramsSnapshot = Scale(food.SugarGrams),
+            SodiumMilligramsSnapshot = Scale(food.SodiumMilligrams),
         };
 
         _db.MealItems.Add(mealItem);
