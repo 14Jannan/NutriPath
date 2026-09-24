@@ -8,14 +8,22 @@ import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { useAuth } from '@/context/AuthContext';
 import { getMyProfile, ProfileResponse } from '@/api/profileApi';
+import { getSyncStatus, DataSourceStatus } from '@/api/syncApi';
 import { ProfileStackParamList } from '@/navigation/ProfileStackNavigator';
 import { colors, typography, spacing, radii } from '@/theme';
+
+function describeSync(days: number | null) {
+  if (days === null) return 'never synced';
+  if (days === 0) return 'synced today';
+  return `synced ${days} day${days === 1 ? '' : 's'} ago`;
+}
 
 export function ProfileScreen() {
   const { logoutUser } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<ProfileStackParamList>>();
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sources, setSources] = useState<DataSourceStatus[]>([]);
 
   // Refetch on focus so targets update straight after saving goals.
   useFocusEffect(
@@ -25,6 +33,10 @@ export function ProfileScreen() {
         .then((p) => active && setProfile(p))
         .catch(() => active && setProfile(null))
         .finally(() => active && setLoading(false));
+      // Freshness is informational only, so a failure just hides the card.
+      getSyncStatus()
+        .then((s) => active && setSources(s))
+        .catch(() => active && setSources([]));
       return () => {
         active = false;
       };
@@ -86,6 +98,20 @@ export function ProfileScreen() {
           </>
         )}
 
+        {sources.length > 0 && (
+          <Card style={{ marginTop: spacing.sm }}>
+            <Text style={styles.sectionTitle}>Food Data</Text>
+            {sources.map((s) => (
+              <View key={s.name} style={styles.sourceRow}>
+                <Text style={styles.sourceName}>{s.name}</Text>
+                <Text style={styles.targetSub}>
+                  {s.foodCount.toLocaleString()} foods · {describeSync(s.daysSinceSync)}
+                </Text>
+              </View>
+            ))}
+          </Card>
+        )}
+
         <Button label="Log Out" variant="secondary" onPress={logoutUser} style={{ marginTop: spacing.lg }} />
       </ScrollView>
     </SafeAreaView>
@@ -122,5 +148,7 @@ const styles = StyleSheet.create({
   sectionTitle: { ...typography.labelLg, color: colors.onSurface },
   targetLine: { ...typography.headlineMd, color: colors.primary, marginTop: spacing.xs },
   targetSub: { ...typography.bodySm, color: colors.onSurfaceVariant, marginTop: 2 },
+  sourceRow: { marginTop: spacing.xs },
+  sourceName: { ...typography.labelMd, color: colors.onSurface },
   sectionNote: { ...typography.bodySm, color: colors.onSurfaceVariant, textAlign: 'center' },
 });

@@ -24,6 +24,18 @@ builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "NutriPath API",
+        Version = "v1",
+        Description = "Nutrition tracking with deterministic scoring and a grounded AI assistant. " +
+                      "General wellness guidance only, not medical advice.",
+    });
+
+    // Shows the controllers' /// comments in Swagger UI.
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, $"{typeof(Program).Assembly.GetName().Name}.xml");
+    if (File.Exists(xmlPath)) options.IncludeXmlComments(xmlPath);
+
     // Adds the "Authorize" button in Swagger's UI, so we can paste a
     // bearer token in and test protected endpoints from the browser.
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme

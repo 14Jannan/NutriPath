@@ -7,6 +7,7 @@ using NutriPath.Api.Services;
 
 namespace NutriPath.Api.Controllers;
 
+/// <summary>Importing foods from external sources and checking data freshness.</summary>
 [ApiController]
 [Route("api/[controller]")]
 // Without this, anyone could trigger USDA syncs and spend the API key's quota.
@@ -23,6 +24,7 @@ public class SyncController : ControllerBase
     }
 
     // POST /api/sync/usda?query=rice&pageSize=25
+    /// <summary>Imports foods matching a query from USDA FoodData Central (existing foods are updated, not duplicated).</summary>
     [HttpPost("usda")]
     public async Task<IActionResult> SyncUsda([FromQuery] string query, [FromQuery] int pageSize = 25)
     {
@@ -36,6 +38,7 @@ public class SyncController : ControllerBase
     }
 
     // GET /api/sync/jobs
+    /// <summary>Lists the 20 most recent sync jobs.</summary>
     [HttpGet("jobs")]
     public async Task<IActionResult> GetJobs()
     {
@@ -48,6 +51,7 @@ public class SyncController : ControllerBase
 
     // GET /api/sync/status — per source: how stale it is and how many
     // foods it has contributed, so data freshness can be checked at a glance.
+    /// <summary>Per data source: when it was last synced and how many foods it has contributed.</summary>
     [HttpGet("status")]
     public async Task<IActionResult> GetStatus()
     {

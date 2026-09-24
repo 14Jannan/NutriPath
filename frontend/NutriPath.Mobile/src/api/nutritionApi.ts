@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { todayIso } from '@/utils/date';
 
 // These shapes mirror the C# responses exactly — DailyNutritionResponse
 // (DTOs/NutritionDtos.cs) and WeeklyScoreResponse (DTOs/WeeklyScoreDtos.cs).
@@ -35,12 +36,13 @@ export interface WeeklyScore {
   components: ScoreComponent[];
 }
 
-export async function getDailyNutrition(): Promise<DailyNutrition> {
-  const res = await apiClient.get<DailyNutrition>('/api/nutrition/daily');
+export async function getDailyNutrition(date: string = todayIso()): Promise<DailyNutrition> {
+  const res = await apiClient.get<DailyNutrition>('/api/nutrition/daily', { params: { date } });
   return res.data;
 }
 
-export async function getWeeklyScore(): Promise<WeeklyScore> {
-  const res = await apiClient.get<WeeklyScore>('/api/nutrition/weekly-score');
+// The 7 days ending on `date`.
+export async function getWeeklyScore(date: string = todayIso()): Promise<WeeklyScore> {
+  const res = await apiClient.get<WeeklyScore>('/api/nutrition/weekly-score', { params: { date } });
   return res.data;
 }

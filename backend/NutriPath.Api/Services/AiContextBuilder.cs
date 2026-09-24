@@ -28,13 +28,12 @@ public class AiContextBuilder : IAiContextBuilder
         _weeklyScoreService = weeklyScoreService;
     }
 
-    public async Task<string> BuildContextAsync(Guid userId, string userQuestion)
+    public async Task<string> BuildContextAsync(Guid userId, string userQuestion, DateOnly today)
     {
         var profile = await _db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var dailyTotals = await _nutritionService.GetDailyTotalsAsync(userId, today);
 
-        var weeklyScore = await _weeklyScoreService.GetCurrentWeekScoreAsync(userId);
+        var weeklyScore = await _weeklyScoreService.GetCurrentWeekScoreAsync(userId, today);
 
         // Simple keyword-based retrieval: search the real Foods table for
         // words from the question, so the AI can reference actual catalog
@@ -138,7 +137,7 @@ public class AiContextBuilder : IAiContextBuilder
         foreach (var keyword in keywords)
         {
             var matches = await _db.Foods
-                .Where(f => EF.Functions.ILike(f.Name, $"%{keyword}%"))
+                .Where(f => EF.Functions.ILike(f.Name, SearchPatterns.Contains(keyword)))
                 .Take(3)
                 .ToListAsync();
             results.AddRange(matches);

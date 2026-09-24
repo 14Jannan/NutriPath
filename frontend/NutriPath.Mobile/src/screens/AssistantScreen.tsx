@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Card } from '@/components/Card';
 import * as aiApi from '@/api/aiApi';
 import { colors, typography, spacing, radii } from '@/theme';
+import { confirmAction, showAlert } from '@/utils/alert';
 
 interface ChatMessage {
   id: string;
@@ -57,6 +58,17 @@ export function AssistantScreen() {
     };
   }, []);
 
+  function startNewChat() {
+    confirmAction('Start a new chat?', 'This conversation will be cleared from the screen.', 'New chat', async () => {
+      try {
+        await aiApi.startNewConversation();
+        setMessages(initialMessages);
+      } catch {
+        showAlert('Could not start a new chat', 'Please try again.');
+      }
+    });
+  }
+
   function sendMessage(text: string) {
     if (!text.trim()) return;
 
@@ -87,7 +99,13 @@ export function AssistantScreen() {
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.disclaimerBar}>
         <MaterialCommunityIcons name="information-outline" size={14} color={colors.outline} />
-        <Text style={styles.disclaimerText}>AI Wellness Assistant · General wellness guidance, not medical advice.</Text>
+        <Text style={[styles.disclaimerText, { flex: 1 }]}>
+          AI Wellness Assistant · General wellness guidance, not medical advice.
+        </Text>
+        <Pressable onPress={startNewChat} style={styles.newChatButton} hitSlop={6} accessibilityLabel="Start a new chat">
+          <MaterialCommunityIcons name="chat-plus-outline" size={16} color={colors.primary} />
+          <Text style={styles.newChatText}>New chat</Text>
+        </Pressable>
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -151,12 +169,15 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   disclaimerBar: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    alignItems: 'center',
     gap: 6,
     paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.margin,
     backgroundColor: colors.surfaceContainerLow,
   },
   disclaimerText: { ...typography.bodySm, color: colors.outline },
+  newChatButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  newChatText: { ...typography.labelMd, color: colors.primary },
   messages: { padding: spacing.margin, gap: spacing.sm },
   bubbleRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-end' },
   bubbleRowUser: { justifyContent: 'flex-end' },

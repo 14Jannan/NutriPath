@@ -22,7 +22,7 @@ public class FoodSearchService : IFoodSearchService
         // Plain C# .Contains() would translate to a case-SENSITIVE SQL
         // LIKE on Postgres by default — a real, easy-to-miss gotcha.
         var results = await _db.Foods
-            .Where(f => EF.Functions.ILike(f.Name, $"%{query}%"))
+            .Where(f => EF.Functions.ILike(f.Name, SearchPatterns.Contains(query)))
             .OrderBy(f => f.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)

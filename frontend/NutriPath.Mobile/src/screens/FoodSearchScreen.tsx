@@ -11,7 +11,7 @@ import { colors, typography, spacing, radii } from '@/theme';
 export function FoodSearchScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LogStackParamList>>();
   const route = useRoute<RouteProp<LogStackParamList, 'FoodSearch'>>();
-  const { mealType } = route.params;
+  const { mealType, date } = route.params;
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoodSearchResult[]>([]);
@@ -90,7 +90,7 @@ export function FoodSearchScreen() {
         renderItem={({ item }) => (
           <Pressable
             style={styles.resultRow}
-            onPress={() => navigation.navigate('FoodDetail', { foodId: item.id, mealType })}
+            onPress={() => navigation.navigate('FoodDetail', { foodId: item.id, mealType, date })}
           >
             <View style={{ flex: 1 }}>
               <Text style={styles.resultName}>{item.name}</Text>

@@ -3,6 +3,7 @@ using NutriPath.Api.Services;
 
 namespace NutriPath.Api.Controllers;
 
+/// <summary>Liveness check.</summary>
 [ApiController]
 [Route("api/[controller]")]
 public class HealthController : ControllerBase
@@ -14,6 +15,7 @@ public class HealthController : ControllerBase
         _healthService = healthService;
     }
 
+    /// <summary>Reports that the API is running.</summary>
     [HttpGet]
     public IActionResult Get()
     {

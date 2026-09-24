@@ -5,6 +5,7 @@ using NutriPath.Api.Services;
 
 namespace NutriPath.Api.Controllers;
 
+/// <summary>Searching the food database.</summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
@@ -18,6 +19,7 @@ public class FoodsController : ControllerBase
     }
 
     // GET /api/foods/search?query=rice&page=1&pageSize=20
+    /// <summary>Case-insensitive food search by name (at least 2 characters), paged.</summary>
     [HttpGet("search")]
     public async Task<IActionResult> Search([FromQuery] string query, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
@@ -33,6 +35,7 @@ public class FoodsController : ControllerBase
     }
 
     // GET /api/foods/{id}
+    /// <summary>Gets one food with its nutrients per serving.</summary>
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {

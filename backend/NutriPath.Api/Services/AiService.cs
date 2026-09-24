@@ -32,10 +32,10 @@ public class AiService : IAiService
         _db = db;
     }
 
-    public async Task<ChatResponse> ChatAsync(Guid userId, string question)
+    public async Task<ChatResponse> ChatAsync(Guid userId, string question, DateOnly today)
     {
         // ---- 1. STRUCTURED retrieval: exact facts, plain EF Core queries ----
-        var structuredContextJson = await _contextBuilder.BuildContextAsync(userId, question);
+        var structuredContextJson = await _contextBuilder.BuildContextAsync(userId, question, today);
 
         // ---- 2. SEMANTIC retrieval: relevant knowledge, similarity search ----
         await _retrieval.EnsureIndexBuiltAsync();
@@ -113,6 +113,14 @@ public class AiService : IAiService
         await _db.SaveChangesAsync();
 
         return new ChatResponse(answer, sources);
+    }
+
+    public async Task StartNewConversationAsync(Guid userId)
+    {
+        // Old conversations are kept (for auditing), not deleted. Chat and
+        // history always use the newest one, so this starts a fresh thread.
+        _db.AiConversations.Add(new AiConversation { UserId = userId });
+        await _db.SaveChangesAsync();
     }
 
     public async Task<List<ChatHistoryMessage>> GetHistoryAsync(Guid userId)

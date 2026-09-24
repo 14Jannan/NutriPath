@@ -4,5 +4,5 @@ namespace NutriPath.Api.Services;
 
 public interface IWeeklyScoreService
 {
-    Task<WeeklyScoreResponse> GetCurrentWeekScoreAsync(Guid userId);
+    Task<WeeklyScoreResponse> GetCurrentWeekScoreAsync(Guid userId, DateOnly today);
 }

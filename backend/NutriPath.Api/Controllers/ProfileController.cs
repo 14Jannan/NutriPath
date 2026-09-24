@@ -6,6 +6,7 @@ using NutriPath.Api.Services;
 
 namespace NutriPath.Api.Controllers;
 
+/// <summary>The current user's profile, goals and calculated daily targets.</summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize] // Every action in this controller requires a valid JWT.
@@ -21,6 +22,7 @@ public class ProfileController : ControllerBase
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     // GET /api/profile/me
+    /// <summary>Gets the current user's profile and daily targets.</summary>
     [HttpGet("me")]
     public async Task<IActionResult> GetMyProfile()
     {
@@ -35,6 +37,7 @@ public class ProfileController : ControllerBase
     }
 
     // PUT /api/profile/goals
+    /// <summary>Saves body stats and goals, and recalculates daily targets (Mifflin-St Jeor).</summary>
     [HttpPut("goals")]
     public async Task<IActionResult> UpdateGoals([FromBody] UpdateGoalsRequest request)
     {

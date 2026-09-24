@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { getMyProfile, updateGoals } from '@/api/profileApi';
 import { colors, typography, spacing, radii } from '@/theme';
+import { showAlert } from '@/utils/alert';
 
 const SEXES = ['Male', 'Female'];
 const ACTIVITY_LEVELS = ['Sedentary', 'Light', 'Moderate', 'VeryActive'];
@@ -97,7 +98,7 @@ export function GoalsSetupScreen() {
     } catch (error) {
       // The backend explains exactly which value is out of range.
       const message = isAxiosError(error) ? error.response?.data?.message : undefined;
-      Alert.alert('Could not save', message ?? 'Please check your entries and try again.');
+      showAlert('Could not save', message ?? 'Please check your entries and try again.');
     } finally {
       setSaving(false);
     }

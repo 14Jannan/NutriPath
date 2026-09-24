@@ -5,6 +5,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>985952be-45ad-40e9-9b8f-01bccc780ceb</UserSecretsId>
+    <!-- Emits the /// comments as XML so Swagger can show them. CS1591
+         (missing comment) is silenced: not every public member needs one. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

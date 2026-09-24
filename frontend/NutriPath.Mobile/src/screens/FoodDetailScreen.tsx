@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -9,11 +9,12 @@ import { logMealItem } from '@/api/mealsApi';
 import { Button } from '@/components/Button';
 import { LogStackParamList } from '@/navigation/LogStackNavigator';
 import { colors, typography, spacing, radii } from '@/theme';
+import { showAlert } from '@/utils/alert';
 
 export function FoodDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LogStackParamList>>();
   const route = useRoute<RouteProp<LogStackParamList, 'FoodDetail'>>();
-  const { foodId, mealType } = route.params;
+  const { foodId, mealType, date } = route.params;
 
   const [food, setFood] = useState<FoodSearchResult | null>(null);
   const [quantity, setQuantity] = useState(100);
@@ -26,7 +27,7 @@ export function FoodDetailScreen() {
         setQuantity(data.servingSizeGrams); // default to one standard serving
       })
       .catch(() => {
-        Alert.alert('Could not load food', 'Please try again.');
+        showAlert('Could not load food', 'Please try again.');
         navigation.goBack();
       });
   }, [foodId, navigation]);
@@ -56,10 +57,10 @@ export function FoodDetailScreen() {
     if (saving) return; // ignore double taps while the first request is in flight
     setSaving(true);
     try {
-      await logMealItem(food!.id, quantity, mealType);
+      await logMealItem(food!.id, quantity, mealType, date);
       navigation.navigate('LogHome');
     } catch {
-      Alert.alert('Could not add food', 'Please try again.');
+      showAlert('Could not add food', 'Please try again.');
     } finally {
       setSaving(false);
     }

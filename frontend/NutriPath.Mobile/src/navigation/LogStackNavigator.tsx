@@ -6,8 +6,9 @@ import { FoodDetailScreen } from '@/screens/FoodDetailScreen';
 
 export type LogStackParamList = {
   LogHome: undefined;
-  FoodSearch: { mealType: string };
-  FoodDetail: { foodId: string; mealType: string };
+  // `date` is the local yyyy-MM-dd day being logged into, chosen on LogHome.
+  FoodSearch: { mealType: string; date: string };
+  FoodDetail: { foodId: string; mealType: string; date: string };
 };
 
 const Stack = createNativeStackNavigator<LogStackParamList>();
