@@ -27,4 +27,8 @@ public class AiController : ControllerBase
         var response = await _aiService.ChatAsync(CurrentUserId, request.Question);
         return Ok(response);
     }
+
+    // GET /api/ai/history — the latest conversation, oldest message first.
+    [HttpGet("history")]
+    public async Task<IActionResult> GetHistory() => Ok(await _aiService.GetHistoryAsync(CurrentUserId));
 }

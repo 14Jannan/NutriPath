@@ -34,19 +34,21 @@ public class AiContextBuilder : IAiContextBuilder
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var dailyTotals = await _nutritionService.GetDailyTotalsAsync(userId, today);
 
-        // The weekly score needs a profile (for targets); without one there
-        // is simply no score to report, rather than an error for the chat.
-        var weeklyScore = profile != null ? await _weeklyScoreService.CalculateAsync(userId) : null;
+        var weeklyScore = await _weeklyScoreService.GetCurrentWeekScoreAsync(userId);
 
         // Simple keyword-based retrieval: search the real Foods table for
         // words from the question, so the AI can reference actual catalog
         // items with real nutrition values instead of inventing a dish.
         var candidateFoods = await FindRelevantFoodsAsync(userQuestion);
 
+        var allergies = profile?.Allergies ?? new List<string>();
+        var remainingCalories = (profile?.TargetCalories ?? 0) - dailyTotals.Calories;
+        var mealCandidates = await FindMealCandidatesAsync(remainingCalories, allergies);
+
         var context = new
         {
             userGoal = profile?.Goal.ToString() ?? "Not set",
-            allergies = profile?.Allergies ?? new List<string>(),
+            allergies,
             dietaryPreferences = profile?.DietaryPreferences ?? new List<string>(),
             dailyTargets = new
             {
@@ -57,23 +59,34 @@ public class AiContextBuilder : IAiContextBuilder
             todaySoFar = new
             {
                 caloriesEaten = dailyTotals.Calories,
-                caloriesRemaining = (profile?.TargetCalories ?? 0) - dailyTotals.Calories,
+                caloriesRemaining = remainingCalories,
                 proteinGrams = dailyTotals.Protein,
                 fiberGrams = dailyTotals.Fiber,
             },
-            weeklyScore = weeklyScore == null ? null : new
+            weeklyScore = new
             {
                 // Without this, the model has misread "Sugar: 100" as "too
                 // much sugar" when it actually means no penalty at all.
                 howToRead = "All scores are 0-100 where HIGHER IS BETTER. For Sugar and Sodium, 100 means " +
                             "the average stayed within the healthy limit; lower means it went over. For the " +
-                            "others, 100 means the daily target was met. A score of 0 for Calories, Protein or " +
-                            "Fiber when the matching daily target is 0 means the target hasn't been set yet. " +
-                            "Consistency is the share of the last 7 days with at least one meal logged.",
+                            "others, 100 means the daily target was met. Consistency is the share of breakfast, " +
+                            "lunch and dinner logged over the last 7 days. An overall score of 0 with every " +
+                            "component 'No data' means nothing was logged this week.",
                 overall = weeklyScore.Overall,
-                components = weeklyScore.Components.Select(c => new { c.Name, c.Percent }),
+                components = weeklyScore.Components.Select(c => new { c.Label, c.Percent, c.Status, c.Note }),
             },
             relevantFoodsFromDatabase = candidateFoods.Select(f => new
+            {
+                f.Name,
+                f.Calories,
+                f.ProteinGrams,
+                f.FiberGrams,
+                servingSizeGrams = f.ServingSizeGrams,
+            }),
+            // Chosen by plain business rules (FindMealCandidatesAsync), not
+            // by the AI: same remaining budget and allergies always give
+            // the same list. The AI only picks among these and phrases it.
+            mealSuggestionCandidates = mealCandidates.Select(f => new
             {
                 f.Name,
                 f.Calories,
@@ -84,6 +97,29 @@ public class AiContextBuilder : IAiContextBuilder
         };
 
         return JsonSerializer.Serialize(context);
+    }
+
+    private async Task<List<Food>> FindMealCandidatesAsync(decimal remainingCalories, List<string> allergies)
+    {
+        if (remainingCalories <= 0) return new List<Food>();
+
+        // A food fits if one serving is within the remaining calorie budget.
+        // Ranked by protein per calorie — a simple, explainable "better for
+        // you" ordering. A wider page is fetched first because the allergy
+        // filter below runs in memory.
+        var candidates = await _db.Foods
+            .Where(f => f.Calories > 0 && f.Calories <= remainingCalories)
+            .OrderByDescending(f => f.ProteinGrams / f.Calories)
+            .ThenBy(f => f.Name)
+            .Take(50)
+            .ToListAsync();
+
+        // Simple name match, since foods aren't tagged with structured
+        // allergens yet — a best effort, not a guarantee.
+        return candidates
+            .Where(f => !allergies.Any(a => f.Name.Contains(a, StringComparison.OrdinalIgnoreCase)))
+            .Take(5)
+            .ToList();
     }
 
     private async Task<List<Food>> FindRelevantFoodsAsync(string question)

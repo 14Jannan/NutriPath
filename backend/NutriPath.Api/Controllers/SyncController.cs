@@ -1,12 +1,16 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using NutriPath.Api.Data;
+using NutriPath.Api.DTOs;
 using NutriPath.Api.Services;
 
 namespace NutriPath.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+// Without this, anyone could trigger USDA syncs and spend the API key's quota.
+[Authorize]
 public class SyncController : ControllerBase
 {
     private readonly IUsdaFoodSyncService _usdaSync;
@@ -40,5 +44,29 @@ public class SyncController : ControllerBase
             .Take(20)
             .ToListAsync();
         return Ok(jobs);
+    }
+
+    // GET /api/sync/status — per source: how stale it is and how many
+    // foods it has contributed, so data freshness can be checked at a glance.
+    [HttpGet("status")]
+    public async Task<IActionResult> GetStatus()
+    {
+        var sources = await _db.DataSources
+            .Select(s => new
+            {
+                s.Name,
+                s.LastSyncedAtUtc,
+                FoodCount = _db.Foods.Count(f => f.DataSourceId == s.Id),
+            })
+            .ToListAsync();
+
+        var now = DateTime.UtcNow;
+        var result = sources.Select(s => new DataSourceStatus(
+            s.Name,
+            s.LastSyncedAtUtc,
+            s.LastSyncedAtUtc.HasValue ? (int)(now - s.LastSyncedAtUtc.Value).TotalDays : null,
+            s.FoodCount)).ToList();
+
+        return Ok(result);
     }
 }
