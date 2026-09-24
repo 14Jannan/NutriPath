@@ -73,7 +73,7 @@ export function LoginScreen({
           <TextField
             label="Email address"
             icon="email-outline"
-            placeholder="e.g. kavindi@university.ac.lk"
+            placeholder="you@example.com"
             keyboardType="email-address"
             value={email}
             onChangeText={setEmail}
