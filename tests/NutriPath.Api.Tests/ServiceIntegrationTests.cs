@@ -36,11 +36,27 @@ public class ProfileServiceTests
         Assert.Equal(1200, result.TargetCalories);
     }
 
+    [Fact]
+    public async Task UpdateGoals_OtherSex_UsesMidpointOfMaleAndFemaleFormulas()
+    {
+        using var db = TestDb.Create();
+        var user = TestDb.AddUser(db);
+
+        var result = await new ProfileService(db).UpdateGoalsAsync(user.Id, new UpdateGoalsRequest(
+            22, "Other", 170, 65, "Moderate", "Maintain", null, null));
+
+        // BMR = 1602.5 - 78 = 1524.5; x1.55 = 2363
+        Assert.Equal(2363, result.TargetCalories);
+        Assert.Equal("Other", result.Sex);
+    }
+
     [Theory]
     [InlineData(5, "Male", 170, 65, "Moderate", "Maintain")]     // age out of range
     [InlineData(22, "Male", 40, 65, "Moderate", "Maintain")]     // height out of range
     [InlineData(22, "Robot", 170, 65, "Moderate", "Maintain")]   // unknown sex
     [InlineData(22, "Male", 170, 65, "Extreme", "Maintain")]     // unknown activity level
+    [InlineData(23, "Male", 172, 25, "Light", "Maintain")]       // each value in range, but BMI ~8
+    [InlineData(23, "Male", 150, 200, "Light", "Maintain")]      // BMI ~89
     public async Task UpdateGoals_RejectsInvalidInput(int age, string sex, decimal height, decimal weight, string activity, string goal)
     {
         using var db = TestDb.Create();

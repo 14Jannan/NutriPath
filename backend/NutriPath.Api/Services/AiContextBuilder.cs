@@ -117,11 +117,22 @@ public class AiContextBuilder : IAiContextBuilder
         // falls back to matching the name for untagged (e.g. USDA) foods —
         // a best effort, not a guarantee.
         return candidates
-            .Where(f => !allergies.Any(a =>
-                f.Name.Contains(a, StringComparison.OrdinalIgnoreCase) ||
-                (f.Allergens != null && f.Allergens.Contains(a, StringComparison.OrdinalIgnoreCase))))
+            .Where(f => !allergies.Any(a => MentionsAllergen(f, a)))
             .Take(5)
             .ToList();
+    }
+
+    // Also tries the singular ("Eggs" -> "Egg"), since food names like
+    // "Egg, whole, raw" wouldn't contain the plural the user picked.
+    private static bool MentionsAllergen(Food food, string allergy)
+    {
+        var terms = new[] { allergy, allergy.EndsWith('s') ? allergy[..^1] : allergy }
+            .Where(t => t.Length >= 3)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        return terms.Any(t =>
+            food.Name.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+            (food.Allergens != null && food.Allergens.Contains(t, StringComparison.OrdinalIgnoreCase)));
     }
 
     private async Task<List<Food>> FindRelevantFoodsAsync(string question)

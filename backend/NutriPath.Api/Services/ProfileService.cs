@@ -34,6 +34,13 @@ public class ProfileService : IProfileService
         if (request.HeightCm is < 100 or > 250) throw new ArgumentException("Height must be between 100 and 250 cm.");
         if (request.WeightKg is < 25 or > 300) throw new ArgumentException("Weight must be between 25 and 300 kg.");
 
+        // Each value can be in range while the pair is impossible (172 cm
+        // and 25 kg). Outside BMI 12-70 it's a typo, not a real body.
+        var heightM = (double)request.HeightCm / 100;
+        var bmi = (double)request.WeightKg / (heightM * heightM);
+        if (bmi is < 12 or > 70)
+            throw new ArgumentException($"{request.WeightKg} kg at {request.HeightCm} cm doesn't look right. Please check both values.");
+
         if (!Enum.TryParse<Sex>(request.Sex, ignoreCase: true, out var sex))
             throw new ArgumentException("Sex must be Male, Female or Other.");
         if (!Enum.TryParse<ActivityLevel>(request.ActivityLevel, ignoreCase: true, out var activityLevel))
@@ -127,12 +134,25 @@ public class ProfileService : IProfileService
         p.TargetFiberGrams = (int)Math.Round(targetCalories / 1000 * 14);
     }
 
-    private static List<string> Clean(List<string>? values) =>
-        (values ?? new List<string>())
+    // Free text is allowed (for "Other"), so keep it to sane sizes.
+    private const int MaxListItems = 20;
+    private const int MaxItemLength = 50;
+
+    private static List<string> Clean(List<string>? values)
+    {
+        var cleaned = (values ?? new List<string>())
             .Select(v => v.Trim())
             .Where(v => v.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        if (cleaned.Count > MaxListItems)
+            throw new ArgumentException($"Please choose at most {MaxListItems} items.");
+        if (cleaned.Any(v => v.Length > MaxItemLength))
+            throw new ArgumentException($"Each item must be {MaxItemLength} characters or fewer.");
+
+        return cleaned;
+    }
 
     private static ProfileResponse ToDto(User user)
     {

@@ -6,14 +6,34 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { isAxiosError } from 'axios';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import {
+  MultiSelectDropdown,
+  NONE_OPTION,
+  OTHER_OPTION,
+  combineKnownAndOther,
+  splitKnownAndOther,
+} from '@/components/MultiSelectDropdown';
 import { getMyProfile, updateGoals } from '@/api/profileApi';
 import { colors, typography, spacing, radii } from '@/theme';
 import { showAlert } from '@/utils/alert';
+import { bmi, bmiCategory, healthyWeightRange, heightHint, LIMITS, validateBody } from '@/utils/bodyMetrics';
 
-const SEXES = ['Male', 'Female'];
+const SEXES = ['Male', 'Female', 'Other'];
 const ACTIVITY_LEVELS = ['Sedentary', 'Light', 'Moderate', 'VeryActive'];
 const ACTIVITY_LABELS: Record<string, string> = { VeryActive: 'Very active' };
 const GOALS = ['Lose', 'Maintain', 'Gain'];
+
+// The most common food allergens. Names are kept close to how foods are
+// named, since the assistant filters suggestions by matching them.
+const ALLERGY_OPTIONS = [
+  NONE_OPTION, 'Peanuts', 'Tree nuts', 'Milk', 'Eggs', 'Fish', 'Shellfish',
+  'Wheat', 'Gluten', 'Soy', 'Sesame', OTHER_OPTION,
+] as const;
+
+const DIET_OPTIONS = [
+  NONE_OPTION, 'Vegetarian', 'Vegan', 'Pescatarian', 'Halal', 'No beef', 'No pork',
+  'Lactose-free', 'Gluten-free', 'Low sugar', OTHER_OPTION,
+] as const;
 
 function SegmentedRow({
   options,
@@ -41,12 +61,7 @@ function SegmentedRow({
   );
 }
 
-// Comma-separated text <-> list, e.g. "peanuts, shellfish".
-const toList = (text: string) =>
-  text
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+const isSelected = (list: string[], option: string) => list.includes(option);
 
 export function GoalsSetupScreen() {
   const navigation = useNavigation();
@@ -56,8 +71,10 @@ export function GoalsSetupScreen() {
   const [weightKg, setWeightKg] = useState('');
   const [activityLevel, setActivityLevel] = useState('Moderate');
   const [goal, setGoal] = useState('Maintain');
-  const [allergies, setAllergies] = useState('');
-  const [preferences, setPreferences] = useState('');
+  const [allergies, setAllergies] = useState<string[]>([]);
+  const [otherAllergies, setOtherAllergies] = useState('');
+  const [preferences, setPreferences] = useState<string[]>([]);
+  const [otherPreferences, setOtherPreferences] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -73,26 +90,54 @@ export function GoalsSetupScreen() {
           setActivityLevel(p.activityLevel);
           setGoal(p.goal);
         }
-        setAllergies(p.allergies.join(', '));
-        setPreferences(p.dietaryPreferences.join(', '));
+        const savedAllergies = splitKnownAndOther(p.allergies, ALLERGY_OPTIONS);
+        setAllergies(savedAllergies.selected);
+        setOtherAllergies(savedAllergies.otherText);
+        const savedPreferences = splitKnownAndOther(p.dietaryPreferences, DIET_OPTIONS);
+        setPreferences(savedPreferences.selected);
+        setOtherPreferences(savedPreferences.otherText);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
+  const ageNum = parseInt(age, 10);
+  const heightNum = parseFloat(heightCm);
+  const weightNum = parseFloat(weightKg);
+  const heightValid = heightNum >= LIMITS.heightCm.min && heightNum <= LIMITS.heightCm.max;
+  const bodyError = age && heightCm && weightKg ? validateBody(ageNum, heightNum, weightNum) : null;
+  const bmiValue = !bodyError && heightValid && weightKg ? bmi(heightNum, weightNum) : null;
+  const range = heightValid ? healthyWeightRange(heightNum) : null;
+
   async function handleSave() {
     if (saving) return;
+
+    // Checked here first for an instant message; the server checks again.
+    const problem = validateBody(ageNum, heightNum, weightNum);
+    if (problem) {
+      showAlert('Please check your details', problem);
+      return;
+    }
+    if (isSelected(allergies, OTHER_OPTION) && !otherAllergies.trim()) {
+      showAlert('Please specify', 'You ticked "Other" for allergies. Type them in, or untick Other.');
+      return;
+    }
+    if (isSelected(preferences, OTHER_OPTION) && !otherPreferences.trim()) {
+      showAlert('Please specify', 'You ticked "Other" for dietary preferences. Type them in, or untick Other.');
+      return;
+    }
+
     setSaving(true);
     try {
       await updateGoals({
-        age: parseInt(age, 10) || 0,
+        age: ageNum,
         sex,
-        heightCm: parseFloat(heightCm) || 0,
-        weightKg: parseFloat(weightKg) || 0,
+        heightCm: heightNum,
+        weightKg: weightNum,
         activityLevel,
         goal,
-        allergies: toList(allergies),
-        dietaryPreferences: toList(preferences),
+        allergies: combineKnownAndOther(allergies, otherAllergies),
+        dietaryPreferences: combineKnownAndOther(preferences, otherPreferences),
       });
       navigation.goBack();
     } catch (error) {
@@ -145,6 +190,7 @@ export function GoalsSetupScreen() {
               placeholder="e.g. 170"
               placeholderTextColor={colors.outline}
             />
+            <Text style={styles.hint}>{heightHint(Number.isFinite(ageNum) ? ageNum : null)}</Text>
 
             <Text style={styles.label}>Weight (kg)</Text>
             <TextInput
@@ -155,6 +201,18 @@ export function GoalsSetupScreen() {
               placeholder="e.g. 65"
               placeholderTextColor={colors.outline}
             />
+            {range && (
+              <Text style={styles.hint}>
+                Healthy weight for {heightNum} cm: {range.min}–{range.max} kg
+                {ageNum < 18 ? ' (adult range; for under-18s it depends on age)' : ''}
+              </Text>
+            )}
+            {bmiValue !== null && ageNum >= 18 && (
+              <Text style={[styles.hint, styles.bmiLine]}>
+                BMI {bmiValue.toFixed(1)} · {bmiCategory(bmiValue)}
+              </Text>
+            )}
+            {bodyError && <Text style={styles.errorText}>{bodyError}</Text>}
 
             <Text style={styles.label}>Activity level</Text>
             <SegmentedRow
@@ -167,22 +225,26 @@ export function GoalsSetupScreen() {
             <Text style={styles.label}>Goal</Text>
             <SegmentedRow options={GOALS} value={goal} onChange={setGoal} />
 
-            <Text style={styles.label}>Allergies (comma-separated)</Text>
-            <TextInput
-              style={styles.input}
-              value={allergies}
-              onChangeText={setAllergies}
-              placeholder="e.g. peanuts, shellfish"
-              placeholderTextColor={colors.outline}
+            <Text style={styles.label}>Food allergies</Text>
+            <MultiSelectDropdown
+              options={ALLERGY_OPTIONS}
+              selected={allergies}
+              onChange={setAllergies}
+              otherText={otherAllergies}
+              onOtherTextChange={setOtherAllergies}
+              placeholder="Select any food allergies"
+              otherPlaceholder="Which foods? e.g. kiwi, mustard"
             />
 
-            <Text style={styles.label}>Dietary preferences (comma-separated)</Text>
-            <TextInput
-              style={styles.input}
-              value={preferences}
-              onChangeText={setPreferences}
-              placeholder="e.g. vegetarian"
-              placeholderTextColor={colors.outline}
+            <Text style={styles.label}>Dietary preferences</Text>
+            <MultiSelectDropdown
+              options={DIET_OPTIONS}
+              selected={preferences}
+              onChange={setPreferences}
+              otherText={otherPreferences}
+              onOtherTextChange={setOtherPreferences}
+              placeholder="Select any dietary preferences"
+              otherPlaceholder="Please specify, e.g. no seafood"
             />
           </Card>
 
@@ -211,6 +273,9 @@ const styles = StyleSheet.create({
     ...typography.bodyMd,
     color: colors.onSurface,
   },
+  hint: { ...typography.bodySm, color: colors.onSurfaceVariant, marginTop: 2 },
+  bmiLine: { color: colors.primary },
+  errorText: { ...typography.bodySm, color: colors.amberCaution, marginTop: 2 },
   segmentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   segment: {
     paddingHorizontal: 14,

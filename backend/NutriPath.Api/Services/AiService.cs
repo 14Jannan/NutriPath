@@ -64,7 +64,8 @@ public class AiService : IAiService
                or "relevantFoodsFromDatabase", using their listed values (per servingSizeGrams).
                Never invent a dish or its nutrition values. If both lists are empty, say there
                are no suitable options in the food database right now.
-            5) Never suggest a food that matches one of the user's "allergies".
+            5) Never suggest a food that matches one of the user's "allergies", and respect
+               their "dietaryPreferences" (e.g. no meat for Vegetarian, no pork for Halal).
             6) Keep answers concise and encouraging, 2-4 sentences unless asked for detail.
             """;
 
