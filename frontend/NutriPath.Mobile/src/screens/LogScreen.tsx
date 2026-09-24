@@ -9,6 +9,7 @@ import { deleteMealItem, getDailyMeals, DailyMeals, MealItemResponse } from '@/a
 import { LogStackParamList } from '@/navigation/LogStackNavigator';
 import { addDaysIso, describeDay, todayIso } from '@/utils/date';
 import { confirmAction, showAlert } from '@/utils/alert';
+import { describeApiError } from '@/api/client';
 import { colors, typography, spacing, radii } from '@/theme';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Snack', 'Dinner'];
@@ -44,14 +45,21 @@ export function LogScreen() {
   }
 
   function handleDelete(item: MealItemResponse) {
-    confirmAction('Remove this item?', `${item.foodName} (${item.quantityGrams}g)`, 'Remove', async () => {
-      try {
-        await deleteMealItem(item.id);
-        load(date);
-      } catch {
-        showAlert('Could not remove item', 'Please try again.');
-      }
-    });
+    confirmAction(
+      'Remove this item?',
+      `${item.foodName} (${item.quantityGrams}g)`,
+      'Remove',
+      async () => {
+        try {
+          await deleteMealItem(item.id);
+          showAlert('Item removed', item.foodName, 'success');
+          load(date);
+        } catch (error) {
+          showAlert('Could not remove item', describeApiError(error));
+        }
+      },
+      true
+    );
   }
 
   function findMealGroup(mealType: string) {

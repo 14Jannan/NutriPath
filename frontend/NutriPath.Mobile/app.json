@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "NutriPath.Mobile",
-    "slug": "NutriPath.Mobile",
+    "name": "NutriPath",
+    "slug": "nutripath-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -24,7 +24,8 @@
     "plugins": [
       "expo-font",
       "expo-splash-screen",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-asset"
     ]
   }
 }

@@ -41,11 +41,11 @@ export function CreateAccountScreen({ onAccountCreated, onGoToLogin, onGoBack }:
 
   async function handleSubmit() {
     if (!fullName.trim() || !email.trim() || !password) {
-      showAlert('Missing information', 'Please fill in your name, email, and password.');
+      showAlert('Missing information', 'Please fill in your name, email, and password.', 'warning');
       return;
     }
     if (!agreedToTerms) {
-      showAlert('Terms required', 'Please agree to the Terms of Service and Privacy Policy.');
+      showAlert('Terms required', 'Please agree to the Terms of Service and Privacy Policy.', 'warning');
       return;
     }
 

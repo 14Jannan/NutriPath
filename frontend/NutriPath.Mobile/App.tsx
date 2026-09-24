@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import {
   useFonts,
@@ -11,6 +12,7 @@ import { Inter_400Regular } from '@expo-google-fonts/inter';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { colors } from '@/theme';
 import { AuthProvider } from '@/context/AuthContext';
+import { NotificationHost } from '@/components/NotificationHost';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -33,10 +35,14 @@ export default function App() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }} onLayout={onLayoutRootView}>
-      <AuthProvider>
-  <RootNavigator />
-</AuthProvider>
-    </View>
+    <SafeAreaProvider>
+      <View style={{ flex: 1, backgroundColor: colors.surface }} onLayout={onLayoutRootView}>
+        <AuthProvider>
+          <RootNavigator />
+        </AuthProvider>
+        {/* Last, so notifications draw above every screen. */}
+        <NotificationHost />
+      </View>
+    </SafeAreaProvider>
   );
 }

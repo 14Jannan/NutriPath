@@ -10,6 +10,7 @@ import { Button } from '@/components/Button';
 import { LogStackParamList } from '@/navigation/LogStackNavigator';
 import { colors, typography, spacing, radii } from '@/theme';
 import { showAlert } from '@/utils/alert';
+import { describeApiError } from '@/api/client';
 
 export function FoodDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LogStackParamList>>();
@@ -26,8 +27,8 @@ export function FoodDetailScreen() {
         setFood(data);
         setQuantity(data.servingSizeGrams); // default to one standard serving
       })
-      .catch(() => {
-        showAlert('Could not load food', 'Please try again.');
+      .catch((error) => {
+        showAlert('Could not load food', describeApiError(error));
         navigation.goBack();
       });
   }, [foodId, navigation]);
@@ -58,9 +59,10 @@ export function FoodDetailScreen() {
     setSaving(true);
     try {
       await logMealItem(food!.id, quantity, mealType, date);
+      showAlert('Added to ' + mealType, `${food!.name} · ${quantity}g`, 'success');
       navigation.navigate('LogHome');
-    } catch {
-      showAlert('Could not add food', 'Please try again.');
+    } catch (error) {
+      showAlert('Could not add food', describeApiError(error));
     } finally {
       setSaving(false);
     }

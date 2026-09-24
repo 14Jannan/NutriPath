@@ -47,7 +47,7 @@ export function VerifyOtpScreen({ email, onVerified, onGoBack }: VerifyOtpScreen
   async function handleVerify() {
     const code = digits.join('');
     if (code.length !== CODE_LENGTH) {
-      showAlert('Incomplete code', 'Please enter all 6 digits.');
+      showAlert('Incomplete code', 'Please enter all 6 digits.', 'warning');
       return;
     }
 
@@ -66,7 +66,7 @@ export function VerifyOtpScreen({ email, onVerified, onGoBack }: VerifyOtpScreen
     inputRefs.current[0]?.focus();
     // A dedicated resend-code endpoint doesn't exist yet — flagging the
     // gap rather than silently pretending this works.
-    showAlert('Resend not yet implemented', 'A dedicated resend-code endpoint is a good next addition.');
+    showAlert('Resend not yet implemented', 'A dedicated resend-code endpoint is a good next addition.', 'info');
   }
 
   const minutes = Math.floor(secondsLeft / 60);

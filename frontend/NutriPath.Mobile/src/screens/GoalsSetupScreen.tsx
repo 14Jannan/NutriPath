@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndic
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { isAxiosError } from 'axios';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import {
@@ -14,6 +13,7 @@ import {
   splitKnownAndOther,
 } from '@/components/MultiSelectDropdown';
 import { getMyProfile, updateGoals, UpdateGoalsPayload } from '@/api/profileApi';
+import { describeApiError } from '@/api/client';
 import { useLiveGoalsAnalysis } from '@/hooks/useLiveGoalsAnalysis';
 import { colors, typography, spacing, radii } from '@/theme';
 import { showAlert } from '@/utils/alert';
@@ -139,15 +139,15 @@ export function GoalsSetupScreen() {
     // Checked here first for an instant message; the server checks again.
     const problem = validateBody(ageNum, heightNum, weightNum);
     if (problem) {
-      showAlert('Please check your details', problem);
+      showAlert('Please check your details', problem, 'warning');
       return;
     }
     if (isSelected(allergies, OTHER_OPTION) && !otherAllergies.trim()) {
-      showAlert('Please specify', 'You ticked "Other" for allergies. Type them in, or untick Other.');
+      showAlert('Please specify', 'You ticked "Other" for allergies. Type them in, or untick Other.', 'warning');
       return;
     }
     if (isSelected(preferences, OTHER_OPTION) && !otherPreferences.trim()) {
-      showAlert('Please specify', 'You ticked "Other" for dietary preferences. Type them in, or untick Other.');
+      showAlert('Please specify', 'You ticked "Other" for dietary preferences. Type them in, or untick Other.', 'warning');
       return;
     }
 
@@ -163,11 +163,12 @@ export function GoalsSetupScreen() {
         allergies: allergyList,
         dietaryPreferences: preferenceList,
       });
+      showAlert('Goals saved', 'Your daily targets have been updated.', 'success');
       navigation.goBack();
     } catch (error) {
-      // The backend explains exactly which value is out of range.
-      const message = isAxiosError(error) ? error.response?.data?.message : undefined;
-      showAlert('Could not save', message ?? 'Please check your entries and try again.');
+      // The backend explains exactly which value is out of range; other
+      // failures (offline, expired session) get a specific reason too.
+      showAlert('Could not save', describeApiError(error));
     } finally {
       setSaving(false);
     }

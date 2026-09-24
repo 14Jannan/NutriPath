@@ -22,7 +22,7 @@ export function ForgotPasswordScreen({ onCodeSent, onGoBack }: ForgotPasswordScr
 
   async function handleSendCode() {
     if (!email.trim()) {
-      showAlert('Email required', 'Please enter your registered email.');
+      showAlert('Email required', 'Please enter your registered email.', 'warning');
       return;
     }
     try {
@@ -37,11 +37,11 @@ export function ForgotPasswordScreen({ onCodeSent, onGoBack }: ForgotPasswordScr
 
   async function handleUpdatePassword() {
     if (newPassword.length < 8) {
-      showAlert('Password too short', 'Use at least 8 characters.');
+      showAlert('Password too short', 'Use at least 8 characters.', 'warning');
       return;
     }
     if (newPassword !== confirmPassword) {
-      showAlert("Passwords don't match", 'Please re-enter matching passwords.');
+      showAlert("Passwords don't match", 'Please re-enter matching passwords.', 'warning');
       return;
     }
 

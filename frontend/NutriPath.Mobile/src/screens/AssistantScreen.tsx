@@ -6,6 +6,7 @@ import { Card } from '@/components/Card';
 import * as aiApi from '@/api/aiApi';
 import { colors, typography, spacing, radii } from '@/theme';
 import { confirmAction, showAlert } from '@/utils/alert';
+import { describeApiError } from '@/api/client';
 
 interface ChatMessage {
   id: string;
@@ -63,8 +64,9 @@ export function AssistantScreen() {
       try {
         await aiApi.startNewConversation();
         setMessages(initialMessages);
-      } catch {
-        showAlert('Could not start a new chat', 'Please try again.');
+        showAlert('New chat started', undefined, 'success');
+      } catch (error) {
+        showAlert('Could not start a new chat', describeApiError(error));
       }
     });
   }
