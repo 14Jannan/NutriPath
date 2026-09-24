@@ -19,12 +19,12 @@ public class AiController : ControllerBase
 
     // POST /api/ai/chat
     [HttpPost("chat")]
-    public async Task<IActionResult> Chat([FromBody] AiChatRequest request)
+    public async Task<IActionResult> Chat([FromBody] ChatRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Message))
-            return BadRequest(new { message = "Message is required." });
+        if (string.IsNullOrWhiteSpace(request.Question))
+            return BadRequest(new { message = "A question is required." });
 
-        var reply = await _aiService.ChatAsync(CurrentUserId, request.Message);
-        return Ok(new AiChatResponse(reply));
+        var response = await _aiService.ChatAsync(CurrentUserId, request.Question);
+        return Ok(response);
     }
 }

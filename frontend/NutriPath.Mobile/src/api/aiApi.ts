@@ -1,7 +1,12 @@
 import { apiClient } from './client';
 
-// Mirrors AiChatResponse in DTOs/AiDtos.cs.
-export async function askAssistant(message: string): Promise<string> {
-  const response = await apiClient.post<{ reply: string }>('/api/ai/chat', { message });
-  return response.data.reply;
+// Mirrors ChatResponse in DTOs/AiDtos.cs.
+export interface ChatResponse {
+  answer: string;
+  sourcesUsed: string[];
+}
+
+export async function askAssistant(question: string): Promise<ChatResponse> {
+  const response = await apiClient.post<ChatResponse>('/api/ai/chat', { question });
+  return response.data;
 }

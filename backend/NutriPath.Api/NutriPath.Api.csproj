@@ -21,4 +21,8 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Data\Seed\knowledge-base.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

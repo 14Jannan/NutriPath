@@ -1,6 +1,8 @@
+using NutriPath.Api.DTOs;
+
 namespace NutriPath.Api.Services;
 
 public interface IAiService
 {
-    Task<string> ChatAsync(Guid userId, string userMessage);
+    Task<ChatResponse> ChatAsync(Guid userId, string question);
 }

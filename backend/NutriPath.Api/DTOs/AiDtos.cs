@@ -1,4 +1,4 @@
 namespace NutriPath.Api.DTOs;
 
-public record AiChatRequest(string Message);
-public record AiChatResponse(string Reply);
+public record ChatRequest(string Question);
+public record ChatResponse(string Answer, List<string> SourcesUsed);

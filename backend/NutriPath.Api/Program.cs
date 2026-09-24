@@ -57,6 +57,10 @@ builder.Services.AddScoped<IWeeklyScoreService, WeeklyScoreService>();
 builder.Services.AddScoped<IAiContextBuilder, AiContextBuilder>();
 builder.Services.AddScoped<IAiService, AiService>();
 
+// Singleton: the TF-IDF index is built once and shared by every request.
+// It depends on the Scoped DbContext only via a short-lived scope.
+builder.Services.AddSingleton<IKnowledgeRetrievalService, KnowledgeRetrievalService>();
+
 builder.Services.AddHttpClient<IUsdaFoodSyncService, UsdaFoodSyncService>();
 builder.Services.AddHttpClient<IGroqClient, GroqClient>();
 
@@ -84,6 +88,28 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+// Seed the AI knowledge base on startup if it's empty. AppContext.BaseDirectory
+// (where the compiled .dll lives, and where the .csproj copies the JSON) is
+// used instead of a relative path, which would depend on the launch folder.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<NutriPathDbContext>();
+    if (!db.KnowledgeChunks.Any())
+    {
+        var jsonPath = Path.Combine(AppContext.BaseDirectory, "Data", "Seed", "knowledge-base.json");
+        var json = File.ReadAllText(jsonPath);
+        var chunks = System.Text.Json.JsonSerializer.Deserialize<List<KnowledgeChunk>>(
+            json,
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        if (chunks != null)
+        {
+            db.KnowledgeChunks.AddRange(chunks);
+            db.SaveChanges();
+        }
+    }
+}
 
 if (app.Environment.IsDevelopment())
 {

@@ -21,6 +21,8 @@ public class NutriPathDbContext : DbContext
     public DbSet<SyncJob> SyncJobs => Set<SyncJob>();
     public DbSet<Meal> Meals => Set<Meal>();
     public DbSet<MealItem> MealItems => Set<MealItem>();
+    public DbSet<KnowledgeChunk> KnowledgeChunks => Set<KnowledgeChunk>();
+    public DbSet<AiConversation> AiConversations => Set<AiConversation>();
     public DbSet<AiMessage> AiMessages => Set<AiMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
