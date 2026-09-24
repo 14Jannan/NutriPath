@@ -1,8 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using NutriPath.Api.Data;
+using NutriPath.Api.DTOs;
+using NutriPath.Api.Services;
 
 namespace NutriPath.Api.Controllers;
 
@@ -11,37 +11,40 @@ namespace NutriPath.Api.Controllers;
 [Authorize] // Every action in this controller requires a valid JWT.
 public class ProfileController : ControllerBase
 {
-    private readonly NutriPathDbContext _db;
+    private readonly IProfileService _profileService;
 
-    public ProfileController(NutriPathDbContext db)
+    public ProfileController(IProfileService profileService)
     {
-        _db = db;
+        _profileService = profileService;
     }
 
+    private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    // GET /api/profile/me
     [HttpGet("me")]
     public async Task<IActionResult> GetMyProfile()
     {
-        // The Sub claim we put in the token back in Step 7 is how we know
-        // WHO is calling, without them sending their user ID separately —
-        // it's already baked into (and verified by) the token itself.
-        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
-        var user = await _db.Users.Include(u => u.Profile)
-            .FirstOrDefaultAsync(u => u.Id == userId);
-
-        if (user == null) return NotFound();
-
-        return Ok(new
+        try
         {
-            user.Id,
-            user.Email,
-            user.EmailVerified,
-            FullName = user.Profile?.FullName,
-            TargetCalories = user.Profile?.TargetCalories ?? 0,
-            TargetProteinGrams = user.Profile?.TargetProteinGrams ?? 0,
-            TargetCarbsGrams = user.Profile?.TargetCarbsGrams ?? 0,
-            TargetFatGrams = user.Profile?.TargetFatGrams ?? 0,
-            TargetFiberGrams = user.Profile?.TargetFiberGrams ?? 0,
-        });
+            return Ok(await _profileService.GetMyProfileAsync(CurrentUserId));
+        }
+        catch (InvalidOperationException)
+        {
+            return NotFound();
+        }
+    }
+
+    // PUT /api/profile/goals
+    [HttpPut("goals")]
+    public async Task<IActionResult> UpdateGoals([FromBody] UpdateGoalsRequest request)
+    {
+        try
+        {
+            return Ok(await _profileService.UpdateGoalsAsync(CurrentUserId, request));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }
