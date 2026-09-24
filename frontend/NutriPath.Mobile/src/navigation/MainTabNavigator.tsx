@@ -2,7 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TodayDashboardScreen } from '@/screens/TodayDashboardScreen';
-import { LogScreen } from '@/screens/LogScreen';
+import { LogStackNavigator } from '@/navigation/LogStackNavigator';
 import { WeeklyScoreScreen } from '@/screens/WeeklyScoreScreen';
 import { AssistantScreen } from '@/screens/AssistantScreen';
 import { ProfileScreen } from '@/screens/ProfileScreen';
@@ -39,7 +39,7 @@ export function MainTabNavigator() {
       })}
     >
       <Tab.Screen name="Today" component={TodayDashboardScreen} />
-      <Tab.Screen name="Log" component={LogScreen} />
+      <Tab.Screen name="Log" component={LogStackNavigator} />
       <Tab.Screen name="Score" component={WeeklyScoreScreen} />
       <Tab.Screen name="Assistant" component={AssistantScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />

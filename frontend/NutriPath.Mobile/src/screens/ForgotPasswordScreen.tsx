@@ -74,7 +74,7 @@ export function ForgotPasswordScreen({ onCodeSent, onGoBack }: ForgotPasswordScr
               <TextField
                 label="Registered Email"
                 icon="email-outline"
-                placeholder="e.g. kavindi@university.ac.lk"
+                placeholder="you@example.com"
                 keyboardType="email-address"
                 value={email}
                 onChangeText={setEmail}

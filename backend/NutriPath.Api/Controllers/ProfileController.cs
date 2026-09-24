@@ -37,6 +37,11 @@ public class ProfileController : ControllerBase
             user.Email,
             user.EmailVerified,
             FullName = user.Profile?.FullName,
+            TargetCalories = user.Profile?.TargetCalories ?? 0,
+            TargetProteinGrams = user.Profile?.TargetProteinGrams ?? 0,
+            TargetCarbsGrams = user.Profile?.TargetCarbsGrams ?? 0,
+            TargetFatGrams = user.Profile?.TargetFatGrams ?? 0,
+            TargetFiberGrams = user.Profile?.TargetFiberGrams ?? 0,
         });
     }
 }

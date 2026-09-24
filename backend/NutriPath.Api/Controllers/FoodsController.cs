@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using NutriPath.Api.Data;
+using NutriPath.Api.DTOs;
+using NutriPath.Api.Services;
 
 namespace NutriPath.Api.Controllers;
 
@@ -10,25 +10,33 @@ namespace NutriPath.Api.Controllers;
 [Authorize]
 public class FoodsController : ControllerBase
 {
-    private readonly NutriPathDbContext _db;
+    private readonly IFoodSearchService _foodSearch;
 
-    public FoodsController(NutriPathDbContext db) => _db = db;
-
-    // GET /api/foods/search?query=rice&take=20
-    [HttpGet("search")]
-    public async Task<IActionResult> Search([FromQuery] string query, [FromQuery] int take = 20)
+    public FoodsController(IFoodSearchService foodSearch)
     {
-        if (string.IsNullOrWhiteSpace(query)) return Ok(Array.Empty<object>());
+        _foodSearch = foodSearch;
+    }
 
-        // ILIKE = case-insensitive LIKE, Postgres-specific. EF.Functions.ILike
-        // is a provider-specific escape hatch — EF Core is database-agnostic
-        // by default, but here we deliberately want a Postgres feature.
-        var results = await _db.Foods
-            .Where(f => EF.Functions.ILike(f.Name, $"%{query}%"))
-            .OrderBy(f => f.Name)
-            .Take(Math.Clamp(take, 1, 50))
-            .ToListAsync();
+    // GET /api/foods/search?query=rice&page=1&pageSize=20
+    [HttpGet("search")]
+    public async Task<IActionResult> Search([FromQuery] string query, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 2)
+        {
+            return Ok(new List<FoodSearchResultDto>()); // don't search on empty/1-char input
+        }
 
+        // Clamped so page=0 can't produce a negative Skip (which throws)
+        // and a huge pageSize can't pull the whole foods table.
+        var results = await _foodSearch.SearchAsync(query.Trim(), Math.Max(page, 1), Math.Clamp(pageSize, 1, 50));
         return Ok(results);
+    }
+
+    // GET /api/foods/{id}
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        var food = await _foodSearch.GetByIdAsync(id);
+        return food == null ? NotFound() : Ok(food);
     }
 }

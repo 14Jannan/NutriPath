@@ -90,14 +90,14 @@ export function CreateAccountScreen({ onAccountCreated, onGoToLogin, onGoBack }:
           <TextField
             label="Full Name"
             icon="account-outline"
-            placeholder="e.g. Kavindi Perera"
+            placeholder="Your full name"
             value={fullName}
             onChangeText={setFullName}
           />
           <TextField
             label="Email address"
             icon="email-outline"
-            placeholder="e.g. kavindi@university.ac.lk"
+            placeholder="you@example.com"
             keyboardType="email-address"
             value={email}
             onChangeText={setEmail}

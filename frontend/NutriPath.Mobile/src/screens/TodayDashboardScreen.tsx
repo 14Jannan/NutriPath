@@ -1,163 +1,179 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Card } from '@/components/Card';
 import { ProgressBar } from '@/components/ProgressBar';
 import { CircularProgress } from '@/components/CircularProgress';
 import { colors, typography, spacing, radii } from '@/theme';
+import * as nutritionApi from '@/api/nutritionApi';
+import type { DailyTotals, MyProfile } from '@/api/nutritionApi';
+import { getDailyMeals, type MealGroup } from '@/api/mealsApi';
 
-// ---- MOCK DATA ----
-// Replaced with real values from GET /api/nutrition/daily once Phase 11
-// (Nutrition Calculation Engine) exists. Shape is deliberately written
-// to already match what that endpoint will realistically return, so the
-// swap later is just changing where this object comes from.
-const mockDaily = {
-  targetCalories: 2100,
-  eatenCalories: 1480,
-  burnedCalories: 340,
-  streakDays: 5,
-  macros: [
-    { key: 'protein', label: 'Protein', icon: 'egg-outline' as const, current: 68, target: 95, unit: 'g' },
-    { key: 'carbs', label: 'Carbs', icon: 'barley' as const, current: 185, target: 260, unit: 'g' },
-    { key: 'fat', label: 'Fat', icon: 'water-outline' as const, current: 44, target: 65, unit: 'g' },
-    { key: 'fibre', label: 'Fibre', icon: 'leaf' as const, current: 26, target: 32, unit: 'g' },
-  ],
-  meals: [
-    { key: 'breakfast', label: 'Breakfast', logged: true, kcal: 420, tag: 'High Protein' },
-    { key: 'lunch', label: 'Lunch', logged: true, kcal: 680, tag: '+9.2g Fibre' },
-    { key: 'snack', label: 'Snack', logged: true, kcal: 150, tag: 'Low GI snack' },
-    { key: 'dinner', label: 'Dinner', logged: false, kcal: null, tag: 'Target ~600 kcal' },
-  ],
-  hydrationLitres: 1.75,
-  hydrationTargetLitres: 2.5,
-};
+function greetingForNow() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+// A target of 0 means it hasn't been set yet — show no progress rather
+// than dividing by zero.
+function ratio(current: number, target: number) {
+  return target > 0 ? current / target : 0;
+}
+
+const round = (value: number) => Math.round(value);
 
 export function TodayDashboardScreen() {
-  const remaining = mockDaily.targetCalories - mockDaily.eatenCalories + mockDaily.burnedCalories;
-  const calorieProgress = mockDaily.eatenCalories / mockDaily.targetCalories;
+  const [profile, setProfile] = useState<MyProfile | null>(null);
+  const [totals, setTotals] = useState<DailyTotals | null>(null);
+  const [meals, setMeals] = useState<MealGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  // Refetch every time the tab comes into focus, so a meal logged on
+  // another screen shows up here straight away.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      Promise.all([nutritionApi.getMyProfile(), nutritionApi.getDailyTotals(), getDailyMeals()])
+        .then(([p, t, m]) => {
+          if (!active) return;
+          setProfile(p);
+          setTotals(t);
+          setMeals(m.meals);
+          setError(false);
+        })
+        .catch(() => active && setError(true))
+        .finally(() => active && setLoading(false));
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
+
+  const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+  const firstName = profile?.fullName?.trim().split(' ')[0];
+
+  const targetCalories = profile?.targetCalories ?? 0;
+  const eatenCalories = round(totals?.calories ?? 0);
+  const remaining = Math.max(0, targetCalories - eatenCalories);
+
+  const macros = [
+    { key: 'protein', label: 'Protein', icon: 'egg-outline' as const, current: totals?.protein ?? 0, target: profile?.targetProteinGrams ?? 0 },
+    { key: 'carbs', label: 'Carbs', icon: 'barley' as const, current: totals?.carbs ?? 0, target: profile?.targetCarbsGrams ?? 0 },
+    { key: 'fat', label: 'Fat', icon: 'water-outline' as const, current: totals?.fat ?? 0, target: profile?.targetFatGrams ?? 0 },
+    { key: 'fibre', label: 'Fibre', icon: 'leaf' as const, current: totals?.fiber ?? 0, target: profile?.targetFiberGrams ?? 0 },
+  ];
+
+  const mealRows = nutritionApi.MEAL_TYPES.map((label) => {
+    const meal = meals.find((m) => m.mealType === label);
+    return { label, meal };
+  });
+  const loggedCount = mealRows.filter((row) => row.meal).length;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <View>
-            {/* MOCK: name and date become real once the profile/daily endpoints feed this screen */}
-            <Text style={styles.greeting}>Good afternoon, Kavindi</Text>
-            <Text style={styles.date}>Thursday, Oct 24</Text>
-          </View>
-          <View style={styles.streakBadge}>
-            <MaterialCommunityIcons name="fire" size={14} color={colors.onSecondaryFixed} />
-            <Text style={styles.streakText}>{mockDaily.streakDays} Days</Text>
-          </View>
-        </View>
-
-        <Card style={styles.gaugeCard}>
-          <View style={styles.gaugeHeader}>
-            <Text style={styles.cardTitle}>Daily Fuel Gauge</Text>
-            <Text style={styles.cardSubtitle}>Target: {mockDaily.targetCalories.toLocaleString()} kcal</Text>
-          </View>
-          <View style={styles.gaugeRow}>
-            <CircularProgress progress={calorieProgress} size={150} strokeWidth={14}>
-              <Text style={styles.gaugeNumber}>{remaining.toLocaleString()}</Text>
-              <Text style={styles.gaugeUnit}>kcal left</Text>
-            </CircularProgress>
-            <View style={styles.gaugeStats}>
-              <View>
-                <Text style={styles.gaugeStatLabel}>Eaten</Text>
-                <Text style={styles.gaugeStatValue}>{mockDaily.eatenCalories.toLocaleString()}</Text>
-                <Text style={styles.gaugeStatUnit}>kcal</Text>
-              </View>
-              <View style={{ marginTop: spacing.md }}>
-                <Text style={styles.gaugeStatLabel}>Burned</Text>
-                <Text style={styles.gaugeStatValue}>{mockDaily.burnedCalories}</Text>
-                <Text style={styles.gaugeStatUnit}>kcal</Text>
-              </View>
-            </View>
-          </View>
-        </Card>
-
-        <Card style={{ marginTop: spacing.sm }}>
-          <View style={styles.gaugeHeader}>
-            <Text style={styles.cardTitle}>Nutritional Balance</Text>
-            <Text style={styles.balancedPill}>Balanced</Text>
-          </View>
-          {mockDaily.macros.map((macro) => (
-            <View key={macro.key} style={styles.macroRow}>
-              <MaterialCommunityIcons name={macro.icon} size={18} color={colors.secondary} />
-              <Text style={styles.macroLabel}>{macro.label}</Text>
-              <View style={{ flex: 1 }}>
-                <ProgressBar progress={macro.current / macro.target} />
-              </View>
-              <Text style={styles.macroValue}>
-                {macro.current}{macro.unit} / {macro.target}{macro.unit}
-              </Text>
-            </View>
-          ))}
-        </Card>
-
-        {/* MOCK: AI insight text is generated by the backend in Phase 13 */}
-        <View style={styles.aiInsight}>
-          <MaterialCommunityIcons name="creation" size={18} color={colors.primary} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.aiInsightLabel}>AI INSIGHT · Lentil boost</Text>
-            <Text style={styles.aiInsightBody}>
-              Great job adding dhal curry at lunch! That gave you{' '}
-              <Text style={{ fontWeight: '700' }}>9.2g of fibre</Text>, putting you right on
-              track for your 30g daily target.
+            <Text style={styles.greeting}>
+              {greetingForNow()}
+              {firstName ? `, ${firstName}` : ''}
             </Text>
+            <Text style={styles.date}>{today}</Text>
           </View>
         </View>
 
-        <View style={styles.mealsHeader}>
-          <Text style={styles.cardTitle}>Today's Meals</Text>
-          <Text style={styles.cardSubtitle}>
-            {mockDaily.meals.filter((m) => m.logged).length} of {mockDaily.meals.length} logged
-          </Text>
-        </View>
+        {loading && <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} />}
 
-        {mockDaily.meals.map((meal) => (
-          <Card key={meal.key} style={{ marginBottom: spacing.sm }}>
-            <View style={styles.mealRow}>
-              <View style={{ flex: 1 }}>
-                <View style={styles.mealTitleRow}>
-                  <Text style={styles.mealTitle}>{meal.label}</Text>
-                  {meal.logged && (
-                    <MaterialCommunityIcons name="check-circle" size={16} color={colors.primary} />
-                  )}
-                </View>
-                <Text style={styles.mealTag}>
-                  {meal.logged ? `${meal.kcal} kcal · ${meal.tag}` : meal.tag}
+        {!loading && error && (
+          <Card>
+            <Text style={styles.emptyText}>Couldn't load today's data. Check that the backend is running.</Text>
+          </Card>
+        )}
+
+        {!loading && !error && (
+          <>
+            {targetCalories === 0 && (
+              <View style={styles.notice}>
+                <MaterialCommunityIcons name="information-outline" size={16} color={colors.secondary} />
+                <Text style={styles.noticeText}>
+                  Your daily targets aren't set yet. They'll appear once your profile goals are filled in.
                 </Text>
               </View>
-              {!meal.logged && (
-                <Pressable style={styles.logButton}>
-                  <MaterialCommunityIcons name="plus" size={16} color={colors.onPrimary} />
-                  <Text style={styles.logButtonText}>Log {meal.label}</Text>
-                </Pressable>
-              )}
-            </View>
-          </Card>
-        ))}
+            )}
 
-        <Card>
-          <View style={styles.mealRow}>
-            <MaterialCommunityIcons name="cup-water" size={22} color={colors.secondary} />
-            <View style={{ flex: 1, marginLeft: spacing.sm }}>
-              <Text style={styles.mealTitle}>Hydration</Text>
-              <Text style={styles.mealTag}>
-                {mockDaily.hydrationLitres} / {mockDaily.hydrationTargetLitres}L
+            <Card style={styles.gaugeCard}>
+              <View style={styles.gaugeHeader}>
+                <Text style={styles.cardTitle}>Daily Fuel Gauge</Text>
+                <Text style={styles.cardSubtitle}>
+                  {targetCalories > 0 ? `Target: ${targetCalories.toLocaleString()} kcal` : 'No target set'}
+                </Text>
+              </View>
+              <View style={styles.gaugeRow}>
+                <CircularProgress progress={Math.min(1, ratio(eatenCalories, targetCalories))} size={150} strokeWidth={14}>
+                  <Text style={styles.gaugeNumber}>
+                    {targetCalories > 0 ? remaining.toLocaleString() : eatenCalories.toLocaleString()}
+                  </Text>
+                  <Text style={styles.gaugeUnit}>{targetCalories > 0 ? 'kcal left' : 'kcal eaten'}</Text>
+                </CircularProgress>
+                <View style={styles.gaugeStats}>
+                  <View>
+                    <Text style={styles.gaugeStatLabel}>Eaten</Text>
+                    <Text style={styles.gaugeStatValue}>{eatenCalories.toLocaleString()}</Text>
+                    <Text style={styles.gaugeStatUnit}>kcal</Text>
+                  </View>
+                </View>
+              </View>
+            </Card>
+
+            <Card style={{ marginTop: spacing.sm }}>
+              <View style={styles.gaugeHeader}>
+                <Text style={styles.cardTitle}>Nutritional Balance</Text>
+              </View>
+              {macros.map((macro) => (
+                <View key={macro.key} style={styles.macroRow}>
+                  <MaterialCommunityIcons name={macro.icon} size={18} color={colors.secondary} />
+                  <Text style={styles.macroLabel}>{macro.label}</Text>
+                  <View style={{ flex: 1 }}>
+                    <ProgressBar progress={Math.min(1, ratio(macro.current, macro.target))} />
+                  </View>
+                  <Text style={styles.macroValue}>
+                    {round(macro.current)}g{macro.target > 0 ? ` / ${macro.target}g` : ''}
+                  </Text>
+                </View>
+              ))}
+            </Card>
+
+            <View style={styles.mealsHeader}>
+              <Text style={styles.cardTitle}>Today's Meals</Text>
+              <Text style={styles.cardSubtitle}>
+                {loggedCount} of {mealRows.length} logged
               </Text>
             </View>
-            <Pressable style={styles.hydrationAdd}>
-              <MaterialCommunityIcons name="plus" size={18} color={colors.primary} />
-            </Pressable>
-          </View>
-          <ProgressBar
-            progress={mockDaily.hydrationLitres / mockDaily.hydrationTargetLitres}
-            color={colors.secondary}
-          />
-        </Card>
+
+            {mealRows.map(({ label, meal }) => (
+              <Card key={label} style={{ marginBottom: spacing.sm }}>
+                <View style={styles.mealRow}>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.mealTitleRow}>
+                      <Text style={styles.mealTitle}>{label}</Text>
+                      {meal && <MaterialCommunityIcons name="check-circle" size={16} color={colors.primary} />}
+                    </View>
+                    <Text style={styles.mealTag}>
+                      {meal
+                        ? `${round(meal.totalCalories)} kcal · ${meal.items.map((i) => i.foodName).join(', ')}`
+                        : 'Not logged yet'}
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+            ))}
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -169,28 +185,19 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   greeting: { ...typography.headlineMd, color: colors.onSurface },
   date: { ...typography.bodySm, color: colors.onSurfaceVariant, marginTop: 2 },
-  streakBadge: {
+  notice: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.secondaryFixed,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceContainerLow,
+    padding: spacing.sm,
+    borderRadius: radii.md,
   },
-  streakText: { ...typography.labelSm, color: colors.onSecondaryFixed },
+  noticeText: { ...typography.bodySm, color: colors.onSurfaceVariant, flex: 1 },
+  emptyText: { ...typography.bodyMd, color: colors.onSurfaceVariant },
   gaugeCard: { alignItems: 'stretch' },
   gaugeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   cardTitle: { ...typography.headlineMd, fontSize: 16, color: colors.onSurface },
   cardSubtitle: { ...typography.labelSm, color: colors.onSurfaceVariant },
-  balancedPill: {
-    ...typography.labelSm,
-    color: colors.primary,
-    backgroundColor: colors.surfaceContainer,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radii.pill,
-  },
   gaugeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
   gaugeNumber: { ...typography.headlineLg, fontSize: 30, color: colors.onSurface },
   gaugeUnit: { ...typography.labelSm, color: colors.onSurfaceVariant },
@@ -201,36 +208,9 @@ const styles = StyleSheet.create({
   macroRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.xs },
   macroLabel: { ...typography.labelMd, color: colors.onSurface, width: 56 },
   macroValue: { ...typography.labelSm, color: colors.onSurfaceVariant, width: 78, textAlign: 'right' },
-  aiInsight: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    backgroundColor: colors.surfaceContainerLow,
-    padding: spacing.sm,
-    borderRadius: radii.md,
-  },
-  aiInsightLabel: { ...typography.labelSm, color: colors.primary, marginBottom: 2 },
-  aiInsightBody: { ...typography.bodySm, color: colors.onSurfaceVariant },
   mealsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs },
   mealRow: { flexDirection: 'row', alignItems: 'center' },
   mealTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   mealTitle: { ...typography.labelLg, color: colors.onSurface },
   mealTag: { ...typography.bodySm, color: colors.onSurfaceVariant, marginTop: 2 },
-  logButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radii.pill,
-  },
-  logButtonText: { ...typography.labelSm, color: colors.onPrimary },
-  hydrationAdd: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.surfaceContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });
