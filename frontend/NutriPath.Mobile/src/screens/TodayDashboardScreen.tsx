@@ -8,8 +8,9 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { CircularProgress } from '@/components/CircularProgress';
 import { colors, typography, spacing, radii } from '@/theme';
 import * as nutritionApi from '@/api/nutritionApi';
-import type { DailyTotals, MyProfile } from '@/api/nutritionApi';
+import type { DailyNutrition } from '@/api/nutritionApi';
 import { getDailyMeals, type MealGroup } from '@/api/mealsApi';
+import { getMyProfile, type ProfileResponse } from '@/api/profileApi';
 
 function greetingForNow() {
   const hour = new Date().getHours();
@@ -26,9 +27,16 @@ function ratio(current: number, target: number) {
 
 const round = (value: number) => Math.round(value);
 
+const MACRO_ICONS: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  Protein: 'egg-outline',
+  Carbs: 'barley',
+  Fat: 'water-outline',
+  Fibre: 'leaf',
+};
+
 export function TodayDashboardScreen() {
-  const [profile, setProfile] = useState<MyProfile | null>(null);
-  const [totals, setTotals] = useState<DailyTotals | null>(null);
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
+  const [nutrition, setNutrition] = useState<DailyNutrition | null>(null);
   const [meals, setMeals] = useState<MealGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -38,11 +46,11 @@ export function TodayDashboardScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      Promise.all([nutritionApi.getMyProfile(), nutritionApi.getDailyTotals(), getDailyMeals()])
-        .then(([p, t, m]) => {
+      Promise.all([getMyProfile(), nutritionApi.getDailyNutrition(), getDailyMeals()])
+        .then(([p, n, m]) => {
           if (!active) return;
           setProfile(p);
-          setTotals(t);
+          setNutrition(n);
           setMeals(m.meals);
           setError(false);
         })
@@ -57,16 +65,19 @@ export function TodayDashboardScreen() {
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
   const firstName = profile?.fullName?.trim().split(' ')[0];
 
-  const targetCalories = profile?.targetCalories ?? 0;
-  const eatenCalories = round(totals?.calories ?? 0);
-  const remaining = Math.max(0, targetCalories - eatenCalories);
+  // Every number here is calculated by the backend (NutritionService);
+  // this screen only displays it.
+  const targetCalories = nutrition?.targetCalories ?? 0;
+  const eatenCalories = nutrition?.eatenCalories ?? 0;
+  const remaining = Math.max(0, nutrition?.remainingCalories ?? 0);
 
-  const macros = [
-    { key: 'protein', label: 'Protein', icon: 'egg-outline' as const, current: totals?.protein ?? 0, target: profile?.targetProteinGrams ?? 0 },
-    { key: 'carbs', label: 'Carbs', icon: 'barley' as const, current: totals?.carbs ?? 0, target: profile?.targetCarbsGrams ?? 0 },
-    { key: 'fat', label: 'Fat', icon: 'water-outline' as const, current: totals?.fat ?? 0, target: profile?.targetFatGrams ?? 0 },
-    { key: 'fibre', label: 'Fibre', icon: 'leaf' as const, current: totals?.fiber ?? 0, target: profile?.targetFiberGrams ?? 0 },
-  ];
+  const macros = (nutrition?.macros ?? []).map((m) => ({
+    key: m.label,
+    label: m.label,
+    icon: MACRO_ICONS[m.label] ?? ('circle-outline' as const),
+    current: m.current,
+    target: m.target,
+  }));
 
   const mealRows = nutritionApi.MEAL_TYPES.map((label) => {
     const meal = meals.find((m) => m.mealType === label);
@@ -101,7 +112,7 @@ export function TodayDashboardScreen() {
               <View style={styles.notice}>
                 <MaterialCommunityIcons name="information-outline" size={16} color={colors.secondary} />
                 <Text style={styles.noticeText}>
-                  Your daily targets aren't set yet. They'll appear once your profile goals are filled in.
+                  Your daily targets aren't set yet. Set up your goals in the Profile tab to see them.
                 </Text>
               </View>
             )}

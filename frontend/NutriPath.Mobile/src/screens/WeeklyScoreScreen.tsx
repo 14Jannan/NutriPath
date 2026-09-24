@@ -7,25 +7,24 @@ import { Card } from '@/components/Card';
 import { ProgressBar } from '@/components/ProgressBar';
 import { colors, typography, spacing, radii } from '@/theme';
 import * as nutritionApi from '@/api/nutritionApi';
-import type { WeeklyScore } from '@/api/nutritionApi';
+import type { ScoreComponent, WeeklyScore } from '@/api/nutritionApi';
 
-// What each component measures — fixed descriptions of the backend's
-// WeeklyScoreService formula, not per-user claims.
-const COMPONENT_NOTES: Record<string, string> = {
-  Calories: '7-day average compared with your calorie target',
-  Protein: '7-day average compared with your protein target',
-  Fiber: '7-day average compared with your fibre target',
-  Sugar: 'Stays at 100 while the daily average is under 50g',
-  Sodium: 'Stays at 100 while the daily average is under 2,300mg',
-  Consistency: 'Share of the last 7 days with at least one meal logged',
+// The status text, note and tone all come from the backend's
+// WeeklyScoreService; this only maps the tone to an icon and colour.
+const TONE_LOOK: Record<ScoreComponent['tone'], { icon: 'check-circle' | 'information' | 'alert'; color: string }> = {
+  good: { icon: 'check-circle', color: colors.primary },
+  neutral: { icon: 'information', color: colors.secondary },
+  warn: { icon: 'alert', color: colors.amberCaution },
 };
 
-const COMPONENT_LABELS: Record<string, string> = { Fiber: 'Fibre' };
-
-function describe(percent: number) {
-  if (percent >= 90) return { status: 'On target', icon: 'check-circle' as const, color: colors.primary };
-  if (percent >= 60) return { status: 'Fair', icon: 'information' as const, color: colors.secondary };
-  return { status: 'Needs attention', icon: 'alert' as const, color: colors.amberCaution };
+// Short weekday labels for the last 7 days, oldest first, ending today —
+// the same order as the backend's dailyScores.
+function lastSevenDayLabels() {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d.toLocaleDateString(undefined, { weekday: 'narrow' });
+  });
 }
 
 export function WeeklyScoreScreen() {
@@ -52,6 +51,7 @@ export function WeeklyScoreScreen() {
   );
 
   const targetsMet = score?.components.filter((c) => c.percent >= 90).length ?? 0;
+  const dayLabels = lastSevenDayLabels();
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -84,6 +84,21 @@ export function WeeklyScoreScreen() {
             </Card>
 
             <Card style={{ marginTop: spacing.sm }}>
+              <Text style={styles.cardTitle}>Last 7 Days</Text>
+              <View style={styles.dayRow}>
+                {score.dailyScores.map((dayScore, i) => (
+                  <View key={i} style={styles.dayColumn}>
+                    <View style={styles.dayBarTrack}>
+                      <View style={[styles.dayBarFill, { height: `${Math.max(dayScore, 2)}%` }]} />
+                    </View>
+                    <Text style={styles.dayScore}>{dayScore > 0 ? dayScore : '–'}</Text>
+                    <Text style={styles.dayLabel}>{dayLabels[i]}</Text>
+                  </View>
+                ))}
+              </View>
+            </Card>
+
+            <Card style={{ marginTop: spacing.sm }}>
               <View style={styles.gaugeHeader}>
                 <Text style={styles.cardTitle}>Nutrient Components</Text>
                 <Text style={styles.balancedPill}>
@@ -91,19 +106,19 @@ export function WeeklyScoreScreen() {
                 </Text>
               </View>
               {score.components.map((c) => {
-                const look = describe(c.percent);
+                const look = TONE_LOOK[c.tone] ?? TONE_LOOK.neutral;
                 return (
-                  <View key={c.name} style={styles.componentRow}>
+                  <View key={c.key} style={styles.componentRow}>
                     <MaterialCommunityIcons name={look.icon} size={18} color={look.color} style={{ marginTop: 2 }} />
                     <View style={{ flex: 1 }}>
                       <View style={styles.componentTitleRow}>
-                        <Text style={styles.componentLabel}>{COMPONENT_LABELS[c.name] ?? c.name}</Text>
+                        <Text style={styles.componentLabel}>{c.label}</Text>
                         <Text style={[styles.componentStatus, { color: look.color }]}>
-                          {c.percent}% · {look.status}
+                          {c.percent}% · {c.status}
                         </Text>
                       </View>
                       <ProgressBar progress={c.percent / 100} color={look.color} />
-                      {COMPONENT_NOTES[c.name] && <Text style={styles.componentNote}>{COMPONENT_NOTES[c.name]}</Text>}
+                      <Text style={styles.componentNote}>{c.note}</Text>
                     </View>
                   </View>
                 );
@@ -137,6 +152,19 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radii.pill,
   },
+  dayRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm },
+  dayColumn: { alignItems: 'center', flex: 1 },
+  dayBarTrack: {
+    width: 14,
+    height: 64,
+    borderRadius: 7,
+    backgroundColor: colors.surfaceContainer,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+  dayBarFill: { width: '100%', backgroundColor: colors.primary, borderRadius: 7 },
+  dayScore: { ...typography.labelSm, color: colors.onSurface, marginTop: 4 },
+  dayLabel: { ...typography.labelSm, color: colors.onSurfaceVariant },
   componentRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
   componentTitleRow: { flexDirection: 'row', justifyContent: 'space-between' },
   componentLabel: { ...typography.labelMd, color: colors.onSurface },
