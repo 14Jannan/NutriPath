@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, KeyboardAvoid
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Card } from '@/components/Card';
+import * as aiApi from '@/api/aiApi';
 import { colors, typography, spacing, radii } from '@/theme';
 
 interface ChatMessage {
@@ -18,12 +19,13 @@ const QUICK_PROMPTS = [
   { icon: 'fire' as const, label: 'Healthy Kottu alternatives' },
 ];
 
-// MOCK: the opening summary is built from real daily totals in Phase 13.
+// A neutral greeting rather than hard-coded numbers — real figures only
+// ever come from the backend, via the assistant's grounded replies.
 const initialMessages: ChatMessage[] = [
   {
     id: '1',
     role: 'assistant',
-    text: "You've had 1,480 kcal today with 68g protein and 26g fibre. How can I help you finish strong tonight?",
+    text: 'Hi! Ask me about your meals today, your weekly score, or what to eat next.',
   },
 ];
 
@@ -38,18 +40,23 @@ export function AssistantScreen() {
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
 
-    // Placeholder reply — Phase 13 replaces this with a real call to
-    // POST /api/ai/chat, which builds structured context from the
-    // Nutrition module and sends it to Groq. The backend, not this
-    // screen, decides what the AI is allowed to say.
-    setTimeout(() => {
-      const reply: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        text: 'Real AI responses arrive in Phase 13, grounded in your actual logged nutrition data rather than made up here.',
-      };
-      setMessages((prev) => [...prev, reply]);
-    }, 500);
+    // POST /api/ai/chat builds structured context from the Nutrition
+    // module and sends it to Groq. The backend, not this screen, decides
+    // what the AI is allowed to say.
+    aiApi
+      .askAssistant(text)
+      .then((reply) => {
+        setMessages((prev) => [
+          ...prev,
+          { id: (Date.now() + 1).toString(), role: 'assistant', text: reply },
+        ]);
+      })
+      .catch(() => {
+        setMessages((prev) => [
+          ...prev,
+          { id: (Date.now() + 1).toString(), role: 'assistant', text: "Sorry, I couldn't reach the assistant right now." },
+        ]);
+      });
   }
 
   return (
