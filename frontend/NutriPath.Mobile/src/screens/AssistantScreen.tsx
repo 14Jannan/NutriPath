@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -107,6 +107,14 @@ export function AssistantScreen() {
     };
   }, [highlightId, messages]);
 
+  // Keep the latest message in view when the keyboard opens and shrinks the list.
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidShow', () => {
+      if (!highlightId) scrollRef.current?.scrollToEnd({ animated: true });
+    });
+    return () => sub.remove();
+  }, [highlightId]);
+
   async function startNewChat() {
     try {
       const id = await aiApi.startNewConversation();
@@ -197,7 +205,9 @@ export function AssistantScreen() {
         </View>
       </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      {/* Android is edge-to-edge, so the window no longer resizes for the
+          keyboard — pad on both platforms to keep the input bar visible. */}
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         {loadingChat ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />
         ) : (
