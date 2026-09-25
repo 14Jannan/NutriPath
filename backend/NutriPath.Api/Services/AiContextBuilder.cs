@@ -28,9 +28,17 @@ public class AiContextBuilder : IAiContextBuilder
         _weeklyScoreService = weeklyScoreService;
     }
 
-    public async Task<string> BuildContextAsync(Guid userId, string userQuestion, DateOnly today)
+    public async Task<string> BuildContextAsync(Guid userId, string userQuestion, ClientClock clock)
     {
+        var today = clock.Today;
         var profile = await _db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+
+        // Which meals are already logged today, so "what should I eat now?"
+        // can suggest the meal that's actually next.
+        var mealsLoggedToday = await _db.Meals
+            .Where(m => m.UserId == userId && m.Date == today && m.Items.Any())
+            .Select(m => m.MealType)
+            .ToListAsync();
         var dailyTotals = await _nutritionService.GetDailyTotalsAsync(userId, today);
 
         var weeklyScore = await _weeklyScoreService.GetCurrentWeekScoreAsync(userId, today);
@@ -46,6 +54,17 @@ public class AiContextBuilder : IAiContextBuilder
 
         var context = new
         {
+            // The user's own clock, so the AI knows the date, day and time
+            // of day where they are (not the server's UTC).
+            now = new
+            {
+                date = today.ToString("dddd, d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture),
+                dayOfWeek = today.DayOfWeek.ToString(),
+                localTime = clock.LocalNow?.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture) ?? "unknown",
+                partOfDay = clock.LocalNow is { } local ? PartOfDay(local.Hour) : "unknown",
+                utcOffset = clock.LocalNow?.ToString("zzz") ?? "unknown",
+            },
+            mealsLoggedToday = mealsLoggedToday.Select(t => t.ToString()).OrderBy(t => t).ToList(),
             userGoal = profile?.Goal.ToString() ?? "Not set",
             allergies,
             dietaryPreferences = profile?.DietaryPreferences ?? new List<string>(),
@@ -97,6 +116,16 @@ public class AiContextBuilder : IAiContextBuilder
 
         return JsonSerializer.Serialize(context);
     }
+
+    private static string PartOfDay(int hour) => hour switch
+    {
+        < 5 => "night",
+        < 11 => "morning (breakfast time)",
+        < 15 => "midday (lunch time)",
+        < 18 => "afternoon (snack time)",
+        < 22 => "evening (dinner time)",
+        _ => "night",
+    };
 
     private async Task<List<Food>> FindMealCandidatesAsync(decimal remainingCalories, List<string> allergies)
     {

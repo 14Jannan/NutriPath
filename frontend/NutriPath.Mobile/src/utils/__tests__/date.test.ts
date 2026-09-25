@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { addDaysIso, describeDay, toLocalIsoDate } from '@/utils/date';
+import { addDaysIso, describeDay, toLocalIsoDate, toLocalIsoDateTime } from '@/utils/date';
 
 describe('toLocalIsoDate', () => {
   it('uses the local calendar day, zero-padded', () => {
@@ -36,5 +36,17 @@ describe('describeDay', () => {
     const label = describeDay('2026-09-21', today);
     expect(label).not.toBe('Today');
     expect(label).toContain('21');
+  });
+});
+
+describe('toLocalIsoDateTime', () => {
+  it('keeps the local time and adds the device UTC offset', () => {
+    const date = new Date(2026, 8, 25, 19, 30, 5);
+    const value = toLocalIsoDateTime(date);
+
+    expect(value.startsWith('2026-09-25T19:30:05')).toBe(true);
+    expect(value).toMatch(/[+-]\d{2}:\d{2}$/);
+    // Parsing it back gives the same moment in time.
+    expect(new Date(value).getTime()).toBe(date.getTime());
   });
 });

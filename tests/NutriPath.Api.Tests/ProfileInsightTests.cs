@@ -15,7 +15,7 @@ public class ProfileInsightTests
         public string? LastUserMessage { get; private set; }
         public Exception? Failure { get; init; }
 
-        public Task<string> AskAsync(string systemPrompt, string userMessage)
+        public Task<string> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<NutriPath.Api.Models.GroqMessage>? history = null)
         {
             LastUserMessage = userMessage;
             if (Failure != null) throw Failure;

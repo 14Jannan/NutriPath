@@ -26,3 +26,16 @@ export function describeDay(isoDate: string, today: string = todayIso()): string
   const [y, m, d] = isoDate.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 }
+
+/**
+ * The device's local date-time WITH its UTC offset, e.g.
+ * "2026-09-25T19:30:00+05:30", so the server knows both the user's local
+ * time and their timezone (toISOString would convert to UTC and lose it).
+ */
+export function toLocalIsoDateTime(date: Date = new Date()): string {
+  const pad = (n: number) => String(Math.floor(Math.abs(n))).padStart(2, '0');
+  const offsetMinutes = -date.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  return `${toLocalIsoDate(date)}T${time}${sign}${pad(offsetMinutes / 60)}:${pad(offsetMinutes % 60)}`;
+}
