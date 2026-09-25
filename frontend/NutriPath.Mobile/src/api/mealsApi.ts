@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { todayIso } from '@/utils/date';
 
 export interface MealItemResponse {
   id: string;
@@ -29,12 +30,13 @@ export interface DailyMeals {
   totalFiberGrams: number;
 }
 
-export async function logMealItem(foodId: string, quantityGrams: number, mealType: string) {
-  await apiClient.post('/api/meals/items', { foodId, quantityGrams, mealType });
+// Dates are the user's local yyyy-MM-dd (see utils/date.ts).
+export async function logMealItem(foodId: string, quantityGrams: number, mealType: string, date: string = todayIso()) {
+  await apiClient.post('/api/meals/items', { foodId, quantityGrams, mealType, date });
 }
 
-export async function getDailyMeals(): Promise<DailyMeals> {
-  const response = await apiClient.get<DailyMeals>('/api/meals/daily');
+export async function getDailyMeals(date: string = todayIso()): Promise<DailyMeals> {
+  const response = await apiClient.get<DailyMeals>('/api/meals/daily', { params: { date } });
   return response.data;
 }
 

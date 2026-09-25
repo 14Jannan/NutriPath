@@ -18,6 +18,8 @@ export interface ProfileResponse {
   targetFiberGrams: number;
   allergies: string[];
   dietaryPreferences: string[];
+  // One of the fixed avatar IDs (constants/avatars.ts), or null if not chosen yet.
+  avatarId: string | null;
 }
 
 export interface UpdateGoalsPayload {
@@ -38,5 +40,43 @@ export async function getMyProfile(): Promise<ProfileResponse> {
 
 export async function updateGoals(payload: UpdateGoalsPayload): Promise<ProfileResponse> {
   const res = await apiClient.put<ProfileResponse>('/api/profile/goals', payload);
+  return res.data;
+}
+
+// Mirrors GoalsPreviewResponse / ProfileInsightResponse in DTOs/ProfileDtos.cs.
+export interface GoalsPreview {
+  targetCalories: number;
+  targetProteinGrams: number;
+  targetCarbsGrams: number;
+  targetFatGrams: number;
+  targetFiberGrams: number;
+  bmi: number;
+  // WHO adult category; null under 18.
+  bmiCategory: string | null;
+  healthyWeightMinKg: number;
+  healthyWeightMaxKg: number;
+}
+
+export interface ProfileInsight {
+  preview: GoalsPreview;
+  // null when the AI is unavailable (the numbers are still valid).
+  insight: string | null;
+}
+
+// Calculates targets for unsaved values — nothing is stored.
+export async function previewGoals(payload: UpdateGoalsPayload): Promise<GoalsPreview> {
+  const res = await apiClient.post<GoalsPreview>('/api/profile/goals/preview', payload);
+  return res.data;
+}
+
+// The AI's explanation of those targets for this person. Rate limited per user.
+export async function getProfileInsight(payload: UpdateGoalsPayload): Promise<ProfileInsight> {
+  const res = await apiClient.post<ProfileInsight>('/api/profile/insights', payload);
+  return res.data;
+}
+
+// Sets the user's avatar; the server only accepts IDs from the fixed set.
+export async function updateAvatar(avatarId: string): Promise<ProfileResponse> {
+  const res = await apiClient.put<ProfileResponse>('/api/profile/avatar', { avatarId });
   return res.data;
 }

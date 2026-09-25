@@ -1,18 +1,30 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, Alert, ActivityIndicator } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { isAxiosError } from 'axios';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
-import { getMyProfile, updateGoals } from '@/api/profileApi';
+import {
+  MultiSelectDropdown,
+  NONE_OPTION,
+  OTHER_OPTION,
+  combineKnownAndOther,
+  splitKnownAndOther,
+} from '@/components/MultiSelectDropdown';
+import { getMyProfile, updateGoals, UpdateGoalsPayload } from '@/api/profileApi';
+import { describeApiError } from '@/api/client';
+import { useLiveGoalsAnalysis } from '@/hooks/useLiveGoalsAnalysis';
+import { ACTIVITY_OPTIONS, ALLERGY_OPTIONS, DIET_OPTIONS, GOAL_OPTIONS, SEX_OPTIONS } from '@/constants/profileOptions';
 import { colors, typography, spacing, radii } from '@/theme';
+import { showAlert } from '@/utils/alert';
+import { bmi, bmiCategory, healthyWeightRange, heightHint, LIMITS, validateBody } from '@/utils/bodyMetrics';
 
-const SEXES = ['Male', 'Female'];
-const ACTIVITY_LEVELS = ['Sedentary', 'Light', 'Moderate', 'VeryActive'];
+// Plain value lists for the compact segmented rows on this edit screen.
+const SEXES = SEX_OPTIONS.map((o) => o.value);
+const ACTIVITY_LEVELS = ACTIVITY_OPTIONS.map((o) => o.value);
 const ACTIVITY_LABELS: Record<string, string> = { VeryActive: 'Very active' };
-const GOALS = ['Lose', 'Maintain', 'Gain'];
+const GOALS = GOAL_OPTIONS.map((o) => o.value);
 
 function SegmentedRow({
   options,
@@ -40,12 +52,7 @@ function SegmentedRow({
   );
 }
 
-// Comma-separated text <-> list, e.g. "peanuts, shellfish".
-const toList = (text: string) =>
-  text
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+const isSelected = (list: string[], option: string) => list.includes(option);
 
 export function GoalsSetupScreen() {
   const navigation = useNavigation();
@@ -55,8 +62,10 @@ export function GoalsSetupScreen() {
   const [weightKg, setWeightKg] = useState('');
   const [activityLevel, setActivityLevel] = useState('Moderate');
   const [goal, setGoal] = useState('Maintain');
-  const [allergies, setAllergies] = useState('');
-  const [preferences, setPreferences] = useState('');
+  const [allergies, setAllergies] = useState<string[]>([]);
+  const [otherAllergies, setOtherAllergies] = useState('');
+  const [preferences, setPreferences] = useState<string[]>([]);
+  const [otherPreferences, setOtherPreferences] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -72,32 +81,84 @@ export function GoalsSetupScreen() {
           setActivityLevel(p.activityLevel);
           setGoal(p.goal);
         }
-        setAllergies(p.allergies.join(', '));
-        setPreferences(p.dietaryPreferences.join(', '));
+        const savedAllergies = splitKnownAndOther(p.allergies, ALLERGY_OPTIONS);
+        setAllergies(savedAllergies.selected);
+        setOtherAllergies(savedAllergies.otherText);
+        const savedPreferences = splitKnownAndOther(p.dietaryPreferences, DIET_OPTIONS);
+        setPreferences(savedPreferences.selected);
+        setOtherPreferences(savedPreferences.otherText);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
+  const ageNum = parseInt(age, 10);
+  const heightNum = parseFloat(heightCm);
+  const weightNum = parseFloat(weightKg);
+  const heightValid = heightNum >= LIMITS.heightCm.min && heightNum <= LIMITS.heightCm.max;
+  const bodyError = age && heightCm && weightKg ? validateBody(ageNum, heightNum, weightNum) : null;
+  const bmiValue = !bodyError && heightValid && weightKg ? bmi(heightNum, weightNum) : null;
+  const range = heightValid ? healthyWeightRange(heightNum) : null;
+
+  const allergyList = combineKnownAndOther(allergies, otherAllergies);
+  const preferenceList = combineKnownAndOther(preferences, otherPreferences);
+
+  // Only complete, plausible values are analysed; anything else clears the cards.
+  const livePayload = useMemo<UpdateGoalsPayload | null>(
+    () =>
+      validateBody(ageNum, heightNum, weightNum) === null
+        ? {
+            age: ageNum,
+            sex,
+            heightCm: heightNum,
+            weightKg: weightNum,
+            activityLevel,
+            goal,
+            allergies: allergyList,
+            dietaryPreferences: preferenceList,
+          }
+        : null,
+    // The lists are compared by content, not identity, to avoid re-running every render.
+    [ageNum, heightNum, weightNum, sex, activityLevel, goal, allergyList.join('|'), preferenceList.join('|')]
+  );
+  const { preview, insight, insightLoading, insightError } = useLiveGoalsAnalysis(livePayload);
+
   async function handleSave() {
     if (saving) return;
+
+    // Checked here first for an instant message; the server checks again.
+    const problem = validateBody(ageNum, heightNum, weightNum);
+    if (problem) {
+      showAlert('Please check your details', problem, 'warning');
+      return;
+    }
+    if (isSelected(allergies, OTHER_OPTION) && !otherAllergies.trim()) {
+      showAlert('Please specify', 'You ticked "Other" for allergies. Type them in, or untick Other.', 'warning');
+      return;
+    }
+    if (isSelected(preferences, OTHER_OPTION) && !otherPreferences.trim()) {
+      showAlert('Please specify', 'You ticked "Other" for dietary preferences. Type them in, or untick Other.', 'warning');
+      return;
+    }
+
     setSaving(true);
     try {
       await updateGoals({
-        age: parseInt(age, 10) || 0,
+        age: ageNum,
         sex,
-        heightCm: parseFloat(heightCm) || 0,
-        weightKg: parseFloat(weightKg) || 0,
+        heightCm: heightNum,
+        weightKg: weightNum,
         activityLevel,
         goal,
-        allergies: toList(allergies),
-        dietaryPreferences: toList(preferences),
+        allergies: allergyList,
+        dietaryPreferences: preferenceList,
       });
+      showAlert('Goals saved', 'Your daily targets have been updated.', 'success');
       navigation.goBack();
     } catch (error) {
-      // The backend explains exactly which value is out of range.
-      const message = isAxiosError(error) ? error.response?.data?.message : undefined;
-      Alert.alert('Could not save', message ?? 'Please check your entries and try again.');
+      // The backend explains exactly which value is out of range; other
+      // failures (offline, expired session) get a specific reason too.
+      showAlert('Could not save', describeApiError(error));
     } finally {
       setSaving(false);
     }
@@ -144,6 +205,7 @@ export function GoalsSetupScreen() {
               placeholder="e.g. 170"
               placeholderTextColor={colors.outline}
             />
+            <Text style={styles.hint}>{heightHint(Number.isFinite(ageNum) ? ageNum : null)}</Text>
 
             <Text style={styles.label}>Weight (kg)</Text>
             <TextInput
@@ -154,6 +216,18 @@ export function GoalsSetupScreen() {
               placeholder="e.g. 65"
               placeholderTextColor={colors.outline}
             />
+            {range && (
+              <Text style={styles.hint}>
+                Healthy weight for {heightNum} cm: {range.min}–{range.max} kg
+                {ageNum < 18 ? ' (adult range; for under-18s it depends on age)' : ''}
+              </Text>
+            )}
+            {bmiValue !== null && ageNum >= 18 && (
+              <Text style={[styles.hint, styles.bmiLine]}>
+                BMI {bmiValue.toFixed(1)} · {bmiCategory(bmiValue)}
+              </Text>
+            )}
+            {bodyError && <Text style={styles.errorText}>{bodyError}</Text>}
 
             <Text style={styles.label}>Activity level</Text>
             <SegmentedRow
@@ -166,24 +240,74 @@ export function GoalsSetupScreen() {
             <Text style={styles.label}>Goal</Text>
             <SegmentedRow options={GOALS} value={goal} onChange={setGoal} />
 
-            <Text style={styles.label}>Allergies (comma-separated)</Text>
-            <TextInput
-              style={styles.input}
-              value={allergies}
-              onChangeText={setAllergies}
-              placeholder="e.g. peanuts, shellfish"
-              placeholderTextColor={colors.outline}
+            <Text style={styles.label}>Food allergies</Text>
+            <MultiSelectDropdown
+              options={ALLERGY_OPTIONS}
+              selected={allergies}
+              onChange={setAllergies}
+              otherText={otherAllergies}
+              onOtherTextChange={setOtherAllergies}
+              placeholder="Select any food allergies"
+              otherPlaceholder="Which foods? e.g. kiwi, mustard"
             />
 
-            <Text style={styles.label}>Dietary preferences (comma-separated)</Text>
-            <TextInput
-              style={styles.input}
-              value={preferences}
-              onChangeText={setPreferences}
-              placeholder="e.g. vegetarian"
-              placeholderTextColor={colors.outline}
+            <Text style={styles.label}>Dietary preferences</Text>
+            <MultiSelectDropdown
+              options={DIET_OPTIONS}
+              selected={preferences}
+              onChange={setPreferences}
+              otherText={otherPreferences}
+              onOtherTextChange={setOtherPreferences}
+              placeholder="Select any dietary preferences"
+              otherPlaceholder="Please specify, e.g. no seafood"
             />
           </Card>
+
+          {!livePayload && (
+            <Text style={styles.liveHint}>
+              Fill in your age, height and weight to see your targets and a personalised analysis.
+            </Text>
+          )}
+
+          {livePayload && (
+            <Card style={styles.liveCard}>
+              <View style={styles.liveHeader}>
+                <MaterialCommunityIcons name="target" size={18} color={colors.primary} />
+                <Text style={styles.liveTitle}>Your daily targets</Text>
+              </View>
+              {preview ? (
+                <>
+                  <Text style={styles.liveKcal}>{preview.targetCalories.toLocaleString()} kcal</Text>
+                  <Text style={styles.hint}>
+                    Protein {preview.targetProteinGrams}g · Carbs {preview.targetCarbsGrams}g · Fat{' '}
+                    {preview.targetFatGrams}g · Fibre {preview.targetFiberGrams}g
+                  </Text>
+                </>
+              ) : (
+                <ActivityIndicator color={colors.primary} style={{ alignSelf: 'flex-start', marginTop: spacing.xs }} />
+              )}
+            </Card>
+          )}
+
+          {livePayload && (
+            <Card style={styles.liveCard}>
+              <View style={styles.liveHeader}>
+                <MaterialCommunityIcons name="robot-happy-outline" size={18} color={colors.primary} />
+                <Text style={styles.liveTitle}>AI analysis for you</Text>
+              </View>
+              {insightLoading ? (
+                <View style={styles.liveHeader}>
+                  <ActivityIndicator color={colors.primary} />
+                  <Text style={styles.hint}>Analysing your age, height, weight and goal...</Text>
+                </View>
+              ) : insight ? (
+                <Text style={styles.insightText}>{insight}</Text>
+              ) : (
+                insightError && <Text style={styles.hint}>{insightError}</Text>
+              )}
+              <Text style={styles.disclaimer}>General wellness guidance, not medical advice.</Text>
+            </Card>
+          )}
 
           <Button label={saving ? 'Saving...' : 'Save Goals'} onPress={handleSave} style={{ marginTop: spacing.lg }} />
         </ScrollView>
@@ -210,6 +334,16 @@ const styles = StyleSheet.create({
     ...typography.bodyMd,
     color: colors.onSurface,
   },
+  liveHint: { ...typography.bodySm, color: colors.onSurfaceVariant, marginTop: spacing.md, textAlign: 'center' },
+  liveCard: { marginTop: spacing.sm, gap: spacing.xs },
+  liveHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  liveTitle: { ...typography.labelLg, color: colors.onSurface },
+  liveKcal: { ...typography.headlineMd, color: colors.primary },
+  insightText: { ...typography.bodyMd, color: colors.onSurface },
+  disclaimer: { ...typography.labelSm, color: colors.outline, marginTop: spacing.xs },
+  hint: { ...typography.bodySm, color: colors.onSurfaceVariant, marginTop: 2 },
+  bmiLine: { color: colors.primary },
+  errorText: { ...typography.bodySm, color: colors.amberCaution, marginTop: 2 },
   segmentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   segment: {
     paddingHorizontal: 14,

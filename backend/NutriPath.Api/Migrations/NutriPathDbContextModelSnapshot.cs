@@ -106,11 +106,17 @@ namespace NutriPath.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Allergens")
+                        .HasColumnType("text");
+
                     b.Property<decimal>("Calories")
                         .HasColumnType("numeric");
 
                     b.Property<decimal>("CarbsGrams")
                         .HasColumnType("numeric");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("DataSourceId")
                         .HasColumnType("uuid");
@@ -148,6 +154,8 @@ namespace NutriPath.Api.Migrations
                         .HasColumnType("numeric");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("DataSourceId", "ExternalId")
                         .IsUnique();
@@ -350,6 +358,10 @@ namespace NutriPath.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
+                    b.Property<string>("AvatarId")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.PrimitiveCollection<List<string>>("DietaryPreferences")
                         .IsRequired()
                         .HasColumnType("text[]");
@@ -420,6 +432,11 @@ namespace NutriPath.Api.Migrations
 
             modelBuilder.Entity("NutriPath.Api.Models.Food", b =>
                 {
+                    b.HasOne("NutriPath.Api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("NutriPath.Api.Models.DataSource", "DataSource")
                         .WithMany()
                         .HasForeignKey("DataSourceId")

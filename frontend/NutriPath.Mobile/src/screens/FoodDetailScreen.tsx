@@ -1,35 +1,51 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getFoodById, FoodSearchResult } from '@/api/foodsApi';
+import { deleteFood, getFoodById, FoodSearchResult } from '@/api/foodsApi';
 import { logMealItem } from '@/api/mealsApi';
 import { Button } from '@/components/Button';
 import { LogStackParamList } from '@/navigation/LogStackNavigator';
 import { colors, typography, spacing, radii } from '@/theme';
+import { confirmAction, showAlert } from '@/utils/alert';
+import { describeApiError } from '@/api/client';
 
 export function FoodDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LogStackParamList>>();
   const route = useRoute<RouteProp<LogStackParamList, 'FoodDetail'>>();
-  const { foodId, mealType } = route.params;
+  const { foodId, mealType, date } = route.params;
 
   const [food, setFood] = useState<FoodSearchResult | null>(null);
   const [quantity, setQuantity] = useState(100);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    getFoodById(foodId)
-      .then((data) => {
-        setFood(data);
-        setQuantity(data.servingSizeGrams); // default to one standard serving
-      })
-      .catch(() => {
-        Alert.alert('Could not load food', 'Please try again.');
-        navigation.goBack();
-      });
-  }, [foodId, navigation]);
+  const portionChosen = useRef(false);
+
+  // Loads on every focus, so coming back from editing shows the new values.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      getFoodById(foodId)
+        .then((data) => {
+          if (!active) return;
+          setFood(data);
+          // Default to one standard serving, but keep a portion the user
+          // already picked if they're returning from an edit.
+          if (!portionChosen.current) setQuantity(data.servingSizeGrams);
+          portionChosen.current = true;
+        })
+        .catch((error) => {
+          if (!active) return;
+          showAlert('Could not load food', describeApiError(error));
+          navigation.goBack();
+        });
+      return () => {
+        active = false;
+      };
+    }, [foodId, navigation])
+  );
 
   if (!food) {
     return (
@@ -52,14 +68,33 @@ export function FoodDetailScreen() {
     fiber: Math.round(food.fiberGrams * scale * 10) / 10,
   };
 
+  function handleDelete() {
+    confirmAction(
+      'Delete this food?',
+      `"${food!.name}" will be removed from your foods.`,
+      'Delete',
+      async () => {
+        try {
+          await deleteFood(food!.id);
+          showAlert('Food deleted', undefined, 'success');
+          navigation.goBack();
+        } catch (error) {
+          showAlert("Couldn't delete the food", describeApiError(error));
+        }
+      },
+      true
+    );
+  }
+
   async function handleAdd() {
     if (saving) return; // ignore double taps while the first request is in flight
     setSaving(true);
     try {
-      await logMealItem(food!.id, quantity, mealType);
+      await logMealItem(food!.id, quantity, mealType, date);
+      showAlert('Added to ' + mealType, `${food!.name} · ${quantity}g`, 'success');
       navigation.navigate('LogHome');
-    } catch {
-      Alert.alert('Could not add food', 'Please try again.');
+    } catch (error) {
+      showAlert('Could not add food', describeApiError(error));
     } finally {
       setSaving(false);
     }
@@ -118,6 +153,23 @@ export function FoodDetailScreen() {
           onPress={handleAdd}
           style={{ marginTop: spacing.lg }}
         />
+
+        {food.isCustom && (
+          <View style={styles.ownActions}>
+            <Pressable
+              style={styles.ownAction}
+              onPress={() => navigation.navigate('AddFood', { mealType, date, foodId: food.id })}
+              accessibilityRole="button"
+            >
+              <MaterialCommunityIcons name="pencil-outline" size={16} color={colors.primary} />
+              <Text style={styles.editText}>Edit this food</Text>
+            </Pressable>
+            <Pressable style={styles.ownAction} onPress={handleDelete} accessibilityRole="button">
+              <MaterialCommunityIcons name="trash-can-outline" size={16} color={colors.amberCaution} />
+              <Text style={styles.deleteText}>Delete this food</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -149,5 +201,9 @@ const styles = StyleSheet.create({
   macroGrid: { flexDirection: 'row', justifyContent: 'space-around' },
   macroCell: { alignItems: 'center' },
   macroValue: { ...typography.headlineMd, fontSize: 16, color: colors.onSurface },
+  ownActions: { flexDirection: 'row', justifyContent: 'center', gap: spacing.lg, marginTop: spacing.sm },
+  ownAction: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 },
+  editText: { ...typography.labelMd, color: colors.primary },
+  deleteText: { ...typography.labelMd, color: colors.amberCaution },
   macroLabel: { ...typography.labelSm, color: colors.onSurfaceVariant },
 });

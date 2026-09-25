@@ -28,25 +28,43 @@ public class AiContextBuilder : IAiContextBuilder
         _weeklyScoreService = weeklyScoreService;
     }
 
-    public async Task<string> BuildContextAsync(Guid userId, string userQuestion)
+    public async Task<string> BuildContextAsync(Guid userId, string userQuestion, ClientClock clock)
     {
+        var today = clock.Today;
         var profile = await _db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // Which meals are already logged today, so "what should I eat now?"
+        // can suggest the meal that's actually next.
+        var mealsLoggedToday = await _db.Meals
+            .Where(m => m.UserId == userId && m.Date == today && m.Items.Any())
+            .Select(m => m.MealType)
+            .ToListAsync();
         var dailyTotals = await _nutritionService.GetDailyTotalsAsync(userId, today);
 
-        var weeklyScore = await _weeklyScoreService.GetCurrentWeekScoreAsync(userId);
+        var weeklyScore = await _weeklyScoreService.GetCurrentWeekScoreAsync(userId, today);
 
         // Simple keyword-based retrieval: search the real Foods table for
         // words from the question, so the AI can reference actual catalog
         // items with real nutrition values instead of inventing a dish.
-        var candidateFoods = await FindRelevantFoodsAsync(userQuestion);
+        var candidateFoods = await FindRelevantFoodsAsync(userId, userQuestion);
 
         var allergies = profile?.Allergies ?? new List<string>();
         var remainingCalories = (profile?.TargetCalories ?? 0) - dailyTotals.Calories;
-        var mealCandidates = await FindMealCandidatesAsync(remainingCalories, allergies);
+        var mealCandidates = await FindMealCandidatesAsync(userId, remainingCalories, allergies);
 
         var context = new
         {
+            // The user's own clock, so the AI knows the date, day and time
+            // of day where they are (not the server's UTC).
+            now = new
+            {
+                date = today.ToString("dddd, d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture),
+                dayOfWeek = today.DayOfWeek.ToString(),
+                localTime = clock.LocalNow?.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture) ?? "unknown",
+                partOfDay = clock.LocalNow is { } local ? PartOfDay(local.Hour) : "unknown",
+                utcOffset = clock.LocalNow?.ToString("zzz") ?? "unknown",
+            },
+            mealsLoggedToday = mealsLoggedToday.Select(t => t.ToString()).OrderBy(t => t).ToList(),
             userGoal = profile?.Goal.ToString() ?? "Not set",
             allergies,
             dietaryPreferences = profile?.DietaryPreferences ?? new List<string>(),
@@ -99,7 +117,17 @@ public class AiContextBuilder : IAiContextBuilder
         return JsonSerializer.Serialize(context);
     }
 
-    private async Task<List<Food>> FindMealCandidatesAsync(decimal remainingCalories, List<string> allergies)
+    private static string PartOfDay(int hour) => hour switch
+    {
+        < 5 => "night",
+        < 11 => "morning (breakfast time)",
+        < 15 => "midday (lunch time)",
+        < 18 => "afternoon (snack time)",
+        < 22 => "evening (dinner time)",
+        _ => "night",
+    };
+
+    private async Task<List<Food>> FindMealCandidatesAsync(Guid userId, decimal remainingCalories, List<string> allergies)
     {
         if (remainingCalories <= 0) return new List<Food>();
 
@@ -108,21 +136,36 @@ public class AiContextBuilder : IAiContextBuilder
         // you" ordering. A wider page is fetched first because the allergy
         // filter below runs in memory.
         var candidates = await _db.Foods
+            .Where(Food.VisibleTo(userId)) // never another user's private foods
             .Where(f => f.Calories > 0 && f.Calories <= remainingCalories)
             .OrderByDescending(f => f.ProteinGrams / f.Calories)
             .ThenBy(f => f.Name)
             .Take(50)
             .ToListAsync();
 
-        // Simple name match, since foods aren't tagged with structured
-        // allergens yet — a best effort, not a guarantee.
+        // Checks the structured Allergens tags where a food has them, and
+        // falls back to matching the name for untagged (e.g. USDA) foods —
+        // a best effort, not a guarantee.
         return candidates
-            .Where(f => !allergies.Any(a => f.Name.Contains(a, StringComparison.OrdinalIgnoreCase)))
+            .Where(f => !allergies.Any(a => MentionsAllergen(f, a)))
             .Take(5)
             .ToList();
     }
 
-    private async Task<List<Food>> FindRelevantFoodsAsync(string question)
+    // Also tries the singular ("Eggs" -> "Egg"), since food names like
+    // "Egg, whole, raw" wouldn't contain the plural the user picked.
+    private static bool MentionsAllergen(Food food, string allergy)
+    {
+        var terms = new[] { allergy, allergy.EndsWith('s') ? allergy[..^1] : allergy }
+            .Where(t => t.Length >= 3)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        return terms.Any(t =>
+            food.Name.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+            (food.Allergens != null && food.Allergens.Contains(t, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private async Task<List<Food>> FindRelevantFoodsAsync(Guid userId, string question)
     {
         // Naive but useful keyword extraction: strip punctuation ("rice?"
         // -> "rice") and keep words longer than 3 characters to skip
@@ -138,7 +181,8 @@ public class AiContextBuilder : IAiContextBuilder
         foreach (var keyword in keywords)
         {
             var matches = await _db.Foods
-                .Where(f => EF.Functions.ILike(f.Name, $"%{keyword}%"))
+                .Where(Food.VisibleTo(userId))
+                .Where(f => EF.Functions.ILike(f.Name, SearchPatterns.Contains(keyword), SearchPatterns.EscapeCharacter))
                 .Take(3)
                 .ToListAsync();
             results.AddRange(matches);

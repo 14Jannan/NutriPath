@@ -3,8 +3,8 @@ namespace NutriPath.Api.Models;
 public enum SyncJobStatus { Running, Completed, Failed }
 
 /// <summary>
-/// One row per sync run. This is what Phase 16 (data freshness &
-/// monitoring) will read from — we're laying the groundwork now instead
+/// One row per sync run. This is what Phase 16 (data freshness and
+/// monitoring) reads from — we're laying the groundwork now instead
 /// of bolting logging on as an afterthought later.
 /// </summary>
 public class SyncJob

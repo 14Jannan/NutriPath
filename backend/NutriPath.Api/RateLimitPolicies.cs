@@ -4,4 +4,7 @@ namespace NutriPath.Api;
 public static class RateLimitPolicies
 {
     public const string Auth = "AuthPolicy";
+
+    // Per user, for endpoints that call the AI on every request.
+    public const string AiInsight = "AiInsightPolicy";
 }

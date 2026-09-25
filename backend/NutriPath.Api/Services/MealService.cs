@@ -21,7 +21,8 @@ public class MealService : IMealService
             throw new InvalidOperationException("Quantity must be greater than zero.");
         }
 
-        var food = await _db.Foods.FirstOrDefaultAsync(f => f.Id == request.FoodId)
+        // Only a shared food or the user's own — never another user's private food.
+        var food = await _db.Foods.Where(Food.VisibleTo(userId)).FirstOrDefaultAsync(f => f.Id == request.FoodId)
             ?? throw new InvalidOperationException("Food not found.");
 
         if (!Enum.TryParse<MealType>(request.MealType, ignoreCase: true, out var mealType))

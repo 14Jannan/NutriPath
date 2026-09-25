@@ -34,7 +34,7 @@ export function LoginScreen({
 
   async function handleSubmit() {
     if (!email.trim() || !password) {
-      showAlert('Missing information', 'Please enter your email and password.');
+      showAlert('Missing information', 'Please enter your email and password.', 'warning');
       return;
     }
 

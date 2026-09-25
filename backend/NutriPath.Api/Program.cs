@@ -15,8 +15,12 @@ builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"))
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
 builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"));
 builder.Services.AddScoped<IFoodSearchService, FoodSearchService>();
+builder.Services.AddScoped<IFoodLookupService, FoodLookupService>();
+// Remembers which terms were recently looked up in USDA (see FoodLookupService).
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IMealService, MealService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
+builder.Services.AddScoped<IProfileInsightService, ProfileInsightService>();
 builder.Services.AddScoped<INutritionService, NutritionService>();
 
 builder.Services.AddControllers();
@@ -24,6 +28,18 @@ builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "NutriPath API",
+        Version = "v1",
+        Description = "Nutrition tracking with deterministic scoring and a grounded AI assistant. " +
+                      "General wellness guidance only, not medical advice.",
+    });
+
+    // Shows the controllers' /// comments in Swagger UI.
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, $"{typeof(Program).Assembly.GetName().Name}.xml");
+    if (File.Exists(xmlPath)) options.IncludeXmlComments(xmlPath);
+
     // Adds the "Authorize" button in Swagger's UI, so we can paste a
     // bearer token in and test protected endpoints from the browser.
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -78,6 +94,22 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0, // reject immediately, no queueing
             }));
+
+    // The goals screen asks for a fresh AI insight as values change. The
+    // app debounces and caches, but this caps each user so a runaway
+    // client can't burn through the Groq quota: 10 per minute per user.
+    options.AddPolicy(RateLimitPolicies.AiInsight, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 });
 
@@ -92,11 +124,25 @@ builder.Services.AddScoped<IWeeklyScoreService, WeeklyScoreService>();
 builder.Services.AddScoped<IAiContextBuilder, AiContextBuilder>();
 builder.Services.AddScoped<IAiService, AiService>();
 
+// Chat messages are encrypted at rest with this key. It lives in user
+// secrets (dev) or the Encryption__MessageKey environment variable (prod),
+// never in the repo. Losing it makes stored chats unreadable, so it's
+// required up front rather than failing on the first message.
+var messageKey = builder.Configuration["Encryption:MessageKey"];
+if (string.IsNullOrWhiteSpace(messageKey))
+    throw new InvalidOperationException(
+        "Encryption:MessageKey is not configured. Generate one with: " +
+        "dotnet user-secrets set \"Encryption:MessageKey\" \"<32 random bytes, base64>\"");
+builder.Services.AddSingleton<IMessageProtector>(new AesGcmMessageProtector(messageKey));
+
 // Singleton: the TF-IDF index is built once and shared by every request.
 // It depends on the Scoped DbContext only via a short-lived scope.
 builder.Services.AddSingleton<IKnowledgeRetrievalService, KnowledgeRetrievalService>();
 
 builder.Services.AddHttpClient<IUsdaFoodSyncService, UsdaFoodSyncService>();
+
+// Imports everyday foods on startup when the catalog is nearly empty.
+builder.Services.AddHostedService<StarterFoodCatalogSeeder>();
 builder.Services.AddHttpClient<IGroqClient, GroqClient>();
 
 builder.Services.AddDbContext<NutriPathDbContext>(options =>
@@ -144,6 +190,12 @@ using (var scope = app.Services.CreateScope())
             db.SaveChanges();
         }
     }
+
+    // Encrypt any chat messages saved before encryption was added.
+    var protector = scope.ServiceProvider.GetRequiredService<IMessageProtector>();
+    var encrypted = MessageEncryptionMigrator.EncryptExistingAsync(db, protector).GetAwaiter().GetResult();
+    if (encrypted > 0)
+        app.Logger.LogInformation("Encrypted {Count} previously unencrypted chat messages.", encrypted);
 }
 
 if (app.Environment.IsDevelopment())
@@ -174,3 +226,7 @@ app.UseRateLimiter();
 app.MapControllers();
 
 app.Run();
+
+// Makes the implicit Program class visible to the test project's
+// WebApplicationFactory<Program>, which boots this app in-memory.
+public partial class Program { }

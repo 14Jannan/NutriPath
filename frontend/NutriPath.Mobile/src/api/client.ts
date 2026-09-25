@@ -23,36 +23,74 @@ apiClient.interceptors.request.use(async (config) => {
   return config;
 });
 
+// The refresh currently in progress, shared by every request that hits a
+// 401 at the same time. Refresh tokens are single-use (the server rotates
+// them), so if several requests each refreshed on their own, all but the
+// first would fail — and their failure would wipe the new tokens, logging
+// the user out mid-action. One shared refresh avoids that.
+let refreshInFlight: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+  if (!refreshToken) return null;
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, { refreshToken });
+    const { accessToken, refreshToken: newRefreshToken } = response.data;
+    await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
+    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newRefreshToken);
+    return accessToken;
+  } catch {
+    // Only clear the session if nobody has stored a newer token meanwhile.
+    if ((await SecureStore.getItemAsync(REFRESH_TOKEN_KEY)) === refreshToken) {
+      await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+      await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+    }
+    return null;
+  }
+}
+
 // Runs after EVERY response. If the server says 401 (token expired/
-// invalid), try exactly once to use the refresh token to get a new
-// access token, then retry the original request. If that also fails,
-// give up and clear everything — the app will treat this as "logged out."
+// invalid), refresh once (shared, see above) and retry the original
+// request. If the refresh fails, the session has genuinely ended.
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true; // prevent an infinite retry loop
 
-      const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
-      if (refreshToken) {
-        try {
-          const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, { refreshToken });
-          const { accessToken, refreshToken: newRefreshToken } = response.data;
+      refreshInFlight ??= refreshAccessToken().finally(() => {
+        refreshInFlight = null;
+      });
+      const accessToken = await refreshInFlight;
 
-          await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
-          await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newRefreshToken);
-
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-          return apiClient(originalRequest); // retry the original call
-        } catch {
-          await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
-          await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
-        }
+      if (accessToken) {
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        return apiClient(originalRequest); // retry the original call
       }
     }
 
     return Promise.reject(error);
   }
 );
+
+/**
+ * A plain-language reason for a failed request: the server's own message
+ * when it sent one, otherwise what kind of failure it was — instead of a
+ * vague "please try again" that hides the real cause.
+ */
+export function describeApiError(error: unknown, fallback = 'Something went wrong. Please try again.'): string {
+  if (!axios.isAxiosError(error)) return fallback;
+  const serverMessage = (error.response?.data as { message?: string } | undefined)?.message;
+  if (serverMessage) return serverMessage;
+  if (!error.response) return "Can't reach the server. Check your connection and that the backend is running.";
+  switch (error.response.status) {
+    case 401:
+      return 'Your session has expired. Please log in again.';
+    case 429:
+      return 'Too many attempts. Please wait a minute and try again.';
+    default:
+      return error.response.status >= 500 ? 'The server had a problem. Please try again shortly.' : fallback;
+  }
+}

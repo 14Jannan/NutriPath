@@ -32,14 +32,13 @@ public class WeeklyScoreService : IWeeklyScoreService
         _db = db;
     }
 
-    public async Task<WeeklyScoreResponse> GetCurrentWeekScoreAsync(Guid userId)
+    public async Task<WeeklyScoreResponse> GetCurrentWeekScoreAsync(Guid userId, DateOnly today)
     {
         var profile = await _db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
         var targetCalories = profile is { TargetCalories: > 0 } ? profile.TargetCalories : DefaultCalories;
         var targetProtein = profile is { TargetProteinGrams: > 0 } ? profile.TargetProteinGrams : DefaultProtein;
         var targetFiber = profile is { TargetFiberGrams: > 0 } ? profile.TargetFiberGrams : DefaultFiber;
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var last7Days = Enumerable.Range(0, 7).Select(i => today.AddDays(-i)).Reverse().ToList();
         var startDate = last7Days.First();
 

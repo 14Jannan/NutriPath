@@ -26,20 +26,49 @@ public class ProfileService : IProfileService
         return ToDto(user);
     }
 
+    public async Task<ProfileResponse> UpdateAvatarAsync(Guid userId, string avatarId)
+    {
+        if (!AvatarCatalog.IsValid(avatarId))
+            throw new ArgumentException("Please choose one of the available avatars.");
+
+        var user = await _db.Users.Include(u => u.Profile).FirstOrDefaultAsync(u => u.Id == userId)
+            ?? throw new InvalidOperationException("User not found.");
+
+        if (user.Profile == null)
+        {
+            user.Profile = new UserProfile { UserId = userId };
+            _db.UserProfiles.Add(user.Profile);
+        }
+
+        user.Profile.AvatarId = avatarId;
+        await _db.SaveChangesAsync();
+        return ToDto(user);
+    }
+
+    public GoalsPreviewResponse Preview(UpdateGoalsRequest request)
+    {
+        // Same validation and formulas as saving, but nothing is stored —
+        // this powers the live preview while the user is still typing.
+        var profile = BuildValidatedProfile(request);
+        CalculateTargets(profile);
+
+        var heightM = (double)profile.HeightCm / 100;
+        var bmi = Math.Round((double)profile.WeightKg / (heightM * heightM), 1);
+        var healthyMin = (int)Math.Round(18.5 * heightM * heightM);
+        var healthyMax = (int)Math.Round(24.9 * heightM * heightM);
+
+        return new GoalsPreviewResponse(
+            profile.TargetCalories, profile.TargetProteinGrams, profile.TargetCarbsGrams,
+            profile.TargetFatGrams, profile.TargetFiberGrams,
+            (decimal)bmi,
+            // Adult BMI categories don't apply under 18 (judged by age percentiles instead).
+            profile.Age >= 18 ? BmiCategory(bmi) : null,
+            healthyMin, healthyMax);
+    }
+
     public async Task<ProfileResponse> UpdateGoalsAsync(Guid userId, UpdateGoalsRequest request)
     {
-        // Out-of-range inputs would otherwise produce a negative BMR and
-        // nonsense targets, so they're rejected before any calculation.
-        if (request.Age is < 13 or > 120) throw new ArgumentException("Age must be between 13 and 120.");
-        if (request.HeightCm is < 100 or > 250) throw new ArgumentException("Height must be between 100 and 250 cm.");
-        if (request.WeightKg is < 25 or > 300) throw new ArgumentException("Weight must be between 25 and 300 kg.");
-
-        if (!Enum.TryParse<Sex>(request.Sex, ignoreCase: true, out var sex))
-            throw new ArgumentException("Sex must be Male, Female or Other.");
-        if (!Enum.TryParse<ActivityLevel>(request.ActivityLevel, ignoreCase: true, out var activityLevel))
-            throw new ArgumentException("Activity level must be Sedentary, Light, Moderate or VeryActive.");
-        if (!Enum.TryParse<NutritionGoal>(request.Goal, ignoreCase: true, out var goal))
-            throw new ArgumentException("Goal must be Lose, Maintain or Gain.");
+        var validated = BuildValidatedProfile(request);
 
         var user = await _db.Users.Include(u => u.Profile).FirstOrDefaultAsync(u => u.Id == userId)
             ?? throw new InvalidOperationException("User not found.");
@@ -51,20 +80,67 @@ public class ProfileService : IProfileService
         }
 
         var profile = user.Profile;
-        profile.Age = request.Age;
-        profile.Sex = sex;
-        profile.HeightCm = request.HeightCm;
-        profile.WeightKg = request.WeightKg;
-        profile.ActivityLevel = activityLevel;
-        profile.Goal = goal;
-        profile.Allergies = Clean(request.Allergies);
-        profile.DietaryPreferences = Clean(request.DietaryPreferences);
+        profile.Age = validated.Age;
+        profile.Sex = validated.Sex;
+        profile.HeightCm = validated.HeightCm;
+        profile.WeightKg = validated.WeightKg;
+        profile.ActivityLevel = validated.ActivityLevel;
+        profile.Goal = validated.Goal;
+        profile.Allergies = validated.Allergies;
+        profile.DietaryPreferences = validated.DietaryPreferences;
 
         CalculateTargets(profile);
 
         await _db.SaveChangesAsync();
         return ToDto(user);
     }
+
+    /// <summary>
+    /// Validates the request and returns an unsaved profile holding its
+    /// values. Out-of-range inputs would otherwise produce a negative BMR
+    /// and nonsense targets, so they're rejected before any calculation.
+    /// </summary>
+    private static UserProfile BuildValidatedProfile(UpdateGoalsRequest request)
+    {
+        if (request.Age is < 13 or > 120) throw new ArgumentException("Age must be between 13 and 120.");
+        if (request.HeightCm is < 100 or > 250) throw new ArgumentException("Height must be between 100 and 250 cm.");
+        if (request.WeightKg is < 25 or > 300) throw new ArgumentException("Weight must be between 25 and 300 kg.");
+
+        // Each value can be in range while the pair is impossible (172 cm
+        // and 25 kg). Outside BMI 12-70 it's a typo, not a real body.
+        var heightM = (double)request.HeightCm / 100;
+        var bmi = (double)request.WeightKg / (heightM * heightM);
+        if (bmi is < 12 or > 70)
+            throw new ArgumentException($"{request.WeightKg} kg at {request.HeightCm} cm doesn't look right. Please check both values.");
+
+        if (!Enum.TryParse<Sex>(request.Sex, ignoreCase: true, out var sex))
+            throw new ArgumentException("Sex must be Male, Female or Other.");
+        if (!Enum.TryParse<ActivityLevel>(request.ActivityLevel, ignoreCase: true, out var activityLevel))
+            throw new ArgumentException("Activity level must be Sedentary, Light, Moderate or VeryActive.");
+        if (!Enum.TryParse<NutritionGoal>(request.Goal, ignoreCase: true, out var goal))
+            throw new ArgumentException("Goal must be Lose, Maintain or Gain.");
+
+        return new UserProfile
+        {
+            Age = request.Age,
+            Sex = sex,
+            HeightCm = request.HeightCm,
+            WeightKg = request.WeightKg,
+            ActivityLevel = activityLevel,
+            Goal = goal,
+            Allergies = Clean(request.Allergies),
+            DietaryPreferences = Clean(request.DietaryPreferences),
+        };
+    }
+
+    // WHO adult BMI categories.
+    private static string BmiCategory(double bmi) => bmi switch
+    {
+        < 18.5 => "Underweight",
+        < 25 => "Healthy",
+        < 30 => "Overweight",
+        _ => "Obese",
+    };
 
     /// <summary>
     /// Mifflin-St Jeor equation for BMR (calories burned at complete rest),
@@ -127,12 +203,25 @@ public class ProfileService : IProfileService
         p.TargetFiberGrams = (int)Math.Round(targetCalories / 1000 * 14);
     }
 
-    private static List<string> Clean(List<string>? values) =>
-        (values ?? new List<string>())
+    // Free text is allowed (for "Other"), so keep it to sane sizes.
+    private const int MaxListItems = 20;
+    private const int MaxItemLength = 50;
+
+    private static List<string> Clean(List<string>? values)
+    {
+        var cleaned = (values ?? new List<string>())
             .Select(v => v.Trim())
             .Where(v => v.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        if (cleaned.Count > MaxListItems)
+            throw new ArgumentException($"Please choose at most {MaxListItems} items.");
+        if (cleaned.Any(v => v.Length > MaxItemLength))
+            throw new ArgumentException($"Each item must be {MaxItemLength} characters or fewer.");
+
+        return cleaned;
+    }
 
     private static ProfileResponse ToDto(User user)
     {
@@ -144,6 +233,7 @@ public class ProfileService : IProfileService
             p.Age, p.Sex.ToString(), p.HeightCm, p.WeightKg,
             p.ActivityLevel.ToString(), p.Goal.ToString(),
             p.TargetCalories, p.TargetProteinGrams, p.TargetCarbsGrams, p.TargetFatGrams, p.TargetFiberGrams,
-            p.Allergies, p.DietaryPreferences);
+            p.Allergies, p.DietaryPreferences,
+            p.AvatarId);
     }
 }

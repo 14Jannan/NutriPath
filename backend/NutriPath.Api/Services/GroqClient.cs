@@ -19,17 +19,13 @@ public class GroqClient : IGroqClient
             new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
     }
 
-    public async Task<string> AskAsync(string systemPrompt, string userMessage)
+    public async Task<string> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage>? history = null)
     {
-        var request = new GroqChatRequest
-        {
-            Model = _settings.Model,
-            Messages = new List<GroqMessage>
-            {
-                new() { Role = "system", Content = systemPrompt },
-                new() { Role = "user", Content = userMessage },
-            },
-        };
+        var messages = new List<GroqMessage> { new() { Role = "system", Content = systemPrompt } };
+        messages.AddRange(history ?? Array.Empty<GroqMessage>());
+        messages.Add(new GroqMessage { Role = "user", Content = userMessage });
+
+        var request = new GroqChatRequest { Model = _settings.Model, Messages = messages };
 
         // Relative path, no leading slash — a leading "/" would replace
         // BaseAddress's "/openai/v1/" path instead of appending to it.

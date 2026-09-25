@@ -5,6 +5,7 @@ using NutriPath.Api.Services;
 
 namespace NutriPath.Api.Controllers;
 
+/// <summary>Registration, email verification, login and password reset. Rate limited to 5 requests per minute per IP (except refresh).</summary>
 [ApiController]
 [Route("api/[controller]")]
 [EnableRateLimiting(RateLimitPolicies.Auth)]
@@ -17,6 +18,7 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
+    /// <summary>Creates an account and emails a 6-digit verification code.</summary>
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
@@ -31,6 +33,7 @@ public class AuthController : ControllerBase
         }
     }
 
+    /// <summary>Verifies the email address with the emailed code.</summary>
     [HttpPost("verify-otp")]
     public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest request)
     {
@@ -45,6 +48,7 @@ public class AuthController : ControllerBase
         }
     }
 
+    /// <summary>Signs in a verified user and returns an access token and refresh token.</summary>
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
@@ -61,6 +65,7 @@ public class AuthController : ControllerBase
 
     // Refresh tokens are long random values that can't be guessed, and the
     // app calls this automatically, so it's exempt from the auth limit.
+    /// <summary>Exchanges a refresh token for a new access/refresh token pair (the old refresh token stops working).</summary>
     [HttpPost("refresh")]
     [DisableRateLimiting]
     public async Task<IActionResult> Refresh([FromBody] RefreshRequest request)
@@ -76,6 +81,7 @@ public class AuthController : ControllerBase
         }
     }
 
+    /// <summary>Emails a password reset code if the account exists (always returns 200, so emails can't be probed).</summary>
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
@@ -83,6 +89,7 @@ public class AuthController : ControllerBase
         return Ok(new { message = "If that email exists, a reset code has been sent." });
     }
 
+    /// <summary>Sets a new password using the emailed reset code.</summary>
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
     {
