@@ -48,7 +48,7 @@ export function RootNavigator() {
     // in, whether the required profile setup has been completed.
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.primary} size="large" />
+        <ActivityIndicator color={colors.primary} size="large" /> 
       </View>
     );
   }
