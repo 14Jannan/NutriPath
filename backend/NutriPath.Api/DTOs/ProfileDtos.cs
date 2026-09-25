@@ -21,4 +21,9 @@ public record ProfileResponse(
     int Age, string Sex, decimal HeightCm, decimal WeightKg,
     string ActivityLevel, string Goal,
     int TargetCalories, int TargetProteinGrams, int TargetCarbsGrams, int TargetFatGrams, int TargetFiberGrams,
-    List<string> Allergies, List<string> DietaryPreferences);
+    List<string> Allergies, List<string> DietaryPreferences,
+    // One of the fixed avatar IDs, or null if none chosen yet.
+    string? AvatarId);
+
+/// <summary>Sets the user's avatar; must be one of the fixed avatar IDs.</summary>
+public record UpdateAvatarRequest(string AvatarId);

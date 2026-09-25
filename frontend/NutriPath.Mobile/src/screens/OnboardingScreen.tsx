@@ -16,6 +16,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { ProgressBar } from '@/components/ProgressBar';
+import { Avatar } from '@/components/Avatar';
+import { AvatarPicker } from '@/components/AvatarPicker';
+import { getAvatar } from '@/constants/avatars';
 import { NONE_OPTION, OTHER_OPTION, combineKnownAndOther } from '@/components/MultiSelectDropdown';
 import {
   ACTIVITY_OPTIONS,
@@ -25,7 +28,7 @@ import {
   GOAL_OPTIONS,
   SEX_OPTIONS,
 } from '@/constants/profileOptions';
-import { updateGoals, UpdateGoalsPayload } from '@/api/profileApi';
+import { updateAvatar, updateGoals, UpdateGoalsPayload } from '@/api/profileApi';
 import { describeApiError } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useLiveGoalsAnalysis } from '@/hooks/useLiveGoalsAnalysis';
@@ -33,7 +36,7 @@ import { showAlert } from '@/utils/alert';
 import { bmi, bmiCategory, healthyWeightRange, heightHint, LIMITS, validateBody } from '@/utils/bodyMetrics';
 import { colors, radii, spacing, typography } from '@/theme';
 
-const STEPS = ['welcome', 'about', 'body', 'activity', 'goal', 'food', 'summary'] as const;
+const STEPS = ['welcome', 'avatar', 'about', 'body', 'activity', 'goal', 'food', 'summary'] as const;
 type Step = (typeof STEPS)[number];
 
 // ---------------------------------------------------------------------------
@@ -231,6 +234,7 @@ export function OnboardingScreen() {
   const firstName = fullName.trim().split(' ')[0];
 
   const [stepIndex, setStepIndex] = useState(0);
+  const [avatarId, setAvatarId] = useState<string | null>(null);
   const [sex, setSex] = useState('');
   const [age, setAge] = useState('');
   const [heightCm, setHeightCm] = useState('');
@@ -271,6 +275,7 @@ export function OnboardingScreen() {
   // Whether "Continue" is allowed on each step: every question is required.
   const stepValid: Record<Step, boolean> = {
     welcome: true,
+    avatar: !!avatarId,
     about: !!sex && ageValid,
     body: !!heightCm && !!weightKg && validateBody(ageNum, heightNum, weightNum) === null,
     activity: !!activityLevel,
@@ -312,6 +317,7 @@ export function OnboardingScreen() {
     if (!payload || saving) return;
     setSaving(true);
     try {
+      if (avatarId) await updateAvatar(avatarId);
       await updateGoals(payload);
       showAlert(firstName ? `You're all set, ${firstName}!` : "You're all set!", 'Your personal plan is ready.', 'success');
       markProfileComplete();
@@ -394,6 +400,17 @@ export function OnboardingScreen() {
                   ))}
                 </Card>
               </View>
+            )}
+
+            {step === 'avatar' && (
+              <>
+                <StepTitle icon="emoticon-happy-outline" title="Pick your avatar" subtitle="It shows on your profile. You can change it any time." />
+                <View style={styles.avatarPreview}>
+                  <Avatar avatarId={avatarId} size={96} />
+                  <Text style={styles.avatarName}>{getAvatar(avatarId)?.label ?? 'Tap one below'}</Text>
+                </View>
+                <AvatarPicker selected={avatarId} onSelect={setAvatarId} />
+              </>
             )}
 
             {step === 'about' && (
@@ -499,6 +516,9 @@ export function OnboardingScreen() {
 
             {step === 'summary' && (
               <>
+                <View style={styles.avatarPreview}>
+                  <Avatar avatarId={avatarId} size={72} />
+                </View>
                 <StepTitle icon="clipboard-check-outline" title="Your plan" subtitle="Check your details, then start. Tap any row to change it." />
 
                 <Card style={styles.targetsCard}>
@@ -544,6 +564,7 @@ export function OnboardingScreen() {
                 </Card>
 
                 <Card style={{ marginTop: spacing.sm, paddingVertical: spacing.xs }}>
+                  <SummaryRow label="Avatar" value={getAvatar(avatarId)?.label ?? '-'} onEdit={() => goTo('avatar')} />
                   <SummaryRow label="About you" value={`${labelOf(SEX_OPTIONS, sex)}, ${ageNum} years`} onEdit={() => goTo('about')} />
                   <SummaryRow label="Body" value={`${heightNum} cm · ${weightNum} kg`} onEdit={() => goTo('body')} />
                   <SummaryRow label="Activity" value={labelOf(ACTIVITY_OPTIONS, activityLevel)} onEdit={() => goTo('activity')} />
@@ -602,6 +623,8 @@ const styles = StyleSheet.create({
   benefitRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   benefitText: { ...typography.bodyMd, color: colors.onSurface, flex: 1 },
 
+  avatarPreview: { alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
+  avatarName: { ...typography.labelLg, color: colors.primary },
   stepTitleBlock: { alignItems: 'center', marginBottom: spacing.md, marginTop: spacing.xs },
   stepIcon: {
     width: 56,

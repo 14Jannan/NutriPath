@@ -54,6 +54,23 @@ public class ProfileController : ControllerBase
         }
     }
 
+    /// <summary>Sets the user's avatar, chosen from the fixed set of avatars.</summary>
+    /// <response code="400">Not one of the available avatars.</response>
+    [HttpPut("avatar")]
+    [ProducesResponseType<ProfileResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateAvatar([FromBody] UpdateAvatarRequest request)
+    {
+        try
+        {
+            return Ok(await _profileService.UpdateAvatarAsync(CurrentUserId, request.AvatarId));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     /// <summary>Calculates targets, BMI and healthy weight range for unsaved values (nothing is stored).</summary>
     /// <remarks>Powers the live preview on the goals screen. Uses exactly the same formulas as saving.</remarks>
     /// <response code="400">A value is out of range or the height/weight pair is implausible.</response>

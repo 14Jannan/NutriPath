@@ -1,3 +1,4 @@
+using NutriPath.Api.Models;
 using NutriPath.Api.DTOs;
 using NutriPath.Api.Services;
 
@@ -64,6 +65,42 @@ public class ProfileServiceTests
 
         await Assert.ThrowsAsync<ArgumentException>(() => new ProfileService(db).UpdateGoalsAsync(
             user.Id, new UpdateGoalsRequest(age, sex, height, weight, activity, goal, null, null)));
+    }
+}
+
+public class AvatarTests
+{
+    [Fact]
+    public async Task UpdateAvatar_SavesAFixedAvatar_AndCanBeChangedLater()
+    {
+        using var db = TestDb.Create();
+        var user = TestDb.AddUser(db);
+        var service = new ProfileService(db);
+
+        Assert.Null((await service.GetMyProfileAsync(user.Id)).AvatarId);
+        Assert.Equal("panda", (await service.UpdateAvatarAsync(user.Id, "panda")).AvatarId);
+        Assert.Equal("carrot", (await service.UpdateAvatarAsync(user.Id, "carrot")).AvatarId);
+        Assert.Equal("carrot", db.UserProfiles.Single().AvatarId);
+    }
+
+    [Theory]
+    [InlineData("dragon")]
+    [InlineData("")]
+    [InlineData("PANDA")] // IDs are exact
+    [InlineData("<script>alert(1)</script>")]
+    public async Task UpdateAvatar_RejectsAnythingOutsideTheCatalog(string avatarId)
+    {
+        using var db = TestDb.Create();
+        var user = TestDb.AddUser(db);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => new ProfileService(db).UpdateAvatarAsync(user.Id, avatarId));
+    }
+
+    [Fact]
+    public void Catalog_HasUniqueShortIds()
+    {
+        Assert.Equal(AvatarCatalog.Ids.Count, AvatarCatalog.Ids.Distinct().Count());
+        Assert.All(AvatarCatalog.Ids, id => Assert.InRange(id.Length, 1, 40));
     }
 }
 

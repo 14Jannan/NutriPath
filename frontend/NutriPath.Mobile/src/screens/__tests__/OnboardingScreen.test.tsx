@@ -15,6 +15,7 @@ const mockAuth = {
 jest.mock('@/context/AuthContext', () => ({ useAuth: () => mockAuth }));
 
 jest.mock('@/api/profileApi', () => ({
+  updateAvatar: jest.fn(),
   updateGoals: jest.fn(),
   previewGoals: jest.fn(),
   getProfileInsight: jest.fn(),
@@ -40,6 +41,7 @@ beforeEach(() => {
   api.previewGoals.mockResolvedValue(preview);
   api.getProfileInsight.mockResolvedValue({ preview, insight: '• Add eggs or dhal to breakfast.' });
   api.updateGoals.mockResolvedValue({} as never);
+  api.updateAvatar.mockResolvedValue({} as never);
 });
 
 const continueButton = () => screen.getByRole('button', { name: 'Continue' });
@@ -56,6 +58,12 @@ describe('OnboardingScreen', () => {
     // Welcome, greeting the user by first name.
     expect(screen.getByText('Hi Jannan!')).toBeTruthy();
     await fireEvent.press(screen.getByText("Let's get started"));
+
+    // Avatar: required, then previewed by name.
+    expect(isDisabled(continueButton())).toBe(true);
+    await fireEvent.press(screen.getByLabelText('Panda'));
+    expect(screen.getAllByText('Panda').length).toBeGreaterThan(1); // tile label + preview name
+    await fireEvent.press(continueButton());
 
     // About you: blocked until both sex and a valid age are given.
     expect(isDisabled(continueButton())).toBe(true);
@@ -100,6 +108,7 @@ describe('OnboardingScreen', () => {
     await fireEvent.press(screen.getByText('Start my journey'));
 
     await waitFor(() => expect(mockAuth.markProfileComplete).toHaveBeenCalled());
+    expect(api.updateAvatar).toHaveBeenCalledWith('panda');
     expect(api.updateGoals).toHaveBeenCalledWith({
       age: 23,
       sex: 'Male',

@@ -34,6 +34,11 @@ public class NutriPathDbContext : DbContext
             .HasIndex(u => u.Email)
             .IsUnique();
 
+        // Avatar IDs are short catalog keys, never free text.
+        modelBuilder.Entity<UserProfile>()
+            .Property(p => p.AvatarId)
+            .HasMaxLength(40);
+
         // One User has exactly one UserProfile, and vice versa.
         modelBuilder.Entity<User>()
             .HasOne(u => u.Profile)

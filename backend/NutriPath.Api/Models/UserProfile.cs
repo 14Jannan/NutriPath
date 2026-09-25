@@ -16,6 +16,9 @@ public class UserProfile
 
     public string FullName { get; set; } = string.Empty;
 
+    // One of AvatarCatalog.Ids, chosen during setup; null until then.
+    public string? AvatarId { get; set; }
+
     public int Age { get; set; }
     public Sex Sex { get; set; }
     public decimal HeightCm { get; set; }

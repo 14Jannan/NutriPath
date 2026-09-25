@@ -26,6 +26,25 @@ public class ProfileService : IProfileService
         return ToDto(user);
     }
 
+    public async Task<ProfileResponse> UpdateAvatarAsync(Guid userId, string avatarId)
+    {
+        if (!AvatarCatalog.IsValid(avatarId))
+            throw new ArgumentException("Please choose one of the available avatars.");
+
+        var user = await _db.Users.Include(u => u.Profile).FirstOrDefaultAsync(u => u.Id == userId)
+            ?? throw new InvalidOperationException("User not found.");
+
+        if (user.Profile == null)
+        {
+            user.Profile = new UserProfile { UserId = userId };
+            _db.UserProfiles.Add(user.Profile);
+        }
+
+        user.Profile.AvatarId = avatarId;
+        await _db.SaveChangesAsync();
+        return ToDto(user);
+    }
+
     public GoalsPreviewResponse Preview(UpdateGoalsRequest request)
     {
         // Same validation and formulas as saving, but nothing is stored —
@@ -214,6 +233,7 @@ public class ProfileService : IProfileService
             p.Age, p.Sex.ToString(), p.HeightCm, p.WeightKg,
             p.ActivityLevel.ToString(), p.Goal.ToString(),
             p.TargetCalories, p.TargetProteinGrams, p.TargetCarbsGrams, p.TargetFatGrams, p.TargetFiberGrams,
-            p.Allergies, p.DietaryPreferences);
+            p.Allergies, p.DietaryPreferences,
+            p.AvatarId);
     }
 }

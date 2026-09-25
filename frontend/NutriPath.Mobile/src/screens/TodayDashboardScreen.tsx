@@ -11,6 +11,7 @@ import * as nutritionApi from '@/api/nutritionApi';
 import type { DailyNutrition } from '@/api/nutritionApi';
 import { getDailyMeals, type MealGroup } from '@/api/mealsApi';
 import { getMyProfile, type ProfileResponse } from '@/api/profileApi';
+import { Avatar } from '@/components/Avatar';
 import { addDaysIso, describeDay, todayIso } from '@/utils/date';
 
 function greetingForNow() {
@@ -101,6 +102,7 @@ export function TodayDashboardScreen() {
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
+          <Avatar avatarId={profile?.avatarId} size={44} />
           <View style={{ flex: 1 }}>
             <Text style={styles.greeting}>
               {isToday ? greetingForNow() : describeDay(date)}
@@ -218,7 +220,7 @@ export function TodayDashboardScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   content: { padding: spacing.margin, gap: spacing.sm, paddingBottom: spacing.xl },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
   dayNav: { flexDirection: 'row' },
   dayButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   greeting: { ...typography.headlineMd, color: colors.onSurface },

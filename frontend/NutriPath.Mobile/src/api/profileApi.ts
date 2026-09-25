@@ -18,6 +18,8 @@ export interface ProfileResponse {
   targetFiberGrams: number;
   allergies: string[];
   dietaryPreferences: string[];
+  // One of the fixed avatar IDs (constants/avatars.ts), or null if not chosen yet.
+  avatarId: string | null;
 }
 
 export interface UpdateGoalsPayload {
@@ -70,5 +72,11 @@ export async function previewGoals(payload: UpdateGoalsPayload): Promise<GoalsPr
 // The AI's explanation of those targets for this person. Rate limited per user.
 export async function getProfileInsight(payload: UpdateGoalsPayload): Promise<ProfileInsight> {
   const res = await apiClient.post<ProfileInsight>('/api/profile/insights', payload);
+  return res.data;
+}
+
+// Sets the user's avatar; the server only accepts IDs from the fixed set.
+export async function updateAvatar(avatarId: string): Promise<ProfileResponse> {
+  const res = await apiClient.put<ProfileResponse>('/api/profile/avatar', { avatarId });
   return res.data;
 }
