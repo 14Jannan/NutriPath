@@ -46,11 +46,11 @@ public class AiContextBuilder : IAiContextBuilder
         // Simple keyword-based retrieval: search the real Foods table for
         // words from the question, so the AI can reference actual catalog
         // items with real nutrition values instead of inventing a dish.
-        var candidateFoods = await FindRelevantFoodsAsync(userQuestion);
+        var candidateFoods = await FindRelevantFoodsAsync(userId, userQuestion);
 
         var allergies = profile?.Allergies ?? new List<string>();
         var remainingCalories = (profile?.TargetCalories ?? 0) - dailyTotals.Calories;
-        var mealCandidates = await FindMealCandidatesAsync(remainingCalories, allergies);
+        var mealCandidates = await FindMealCandidatesAsync(userId, remainingCalories, allergies);
 
         var context = new
         {
@@ -127,7 +127,7 @@ public class AiContextBuilder : IAiContextBuilder
         _ => "night",
     };
 
-    private async Task<List<Food>> FindMealCandidatesAsync(decimal remainingCalories, List<string> allergies)
+    private async Task<List<Food>> FindMealCandidatesAsync(Guid userId, decimal remainingCalories, List<string> allergies)
     {
         if (remainingCalories <= 0) return new List<Food>();
 
@@ -136,6 +136,7 @@ public class AiContextBuilder : IAiContextBuilder
         // you" ordering. A wider page is fetched first because the allergy
         // filter below runs in memory.
         var candidates = await _db.Foods
+            .Where(Food.VisibleTo(userId)) // never another user's private foods
             .Where(f => f.Calories > 0 && f.Calories <= remainingCalories)
             .OrderByDescending(f => f.ProteinGrams / f.Calories)
             .ThenBy(f => f.Name)
@@ -164,7 +165,7 @@ public class AiContextBuilder : IAiContextBuilder
             (food.Allergens != null && food.Allergens.Contains(t, StringComparison.OrdinalIgnoreCase)));
     }
 
-    private async Task<List<Food>> FindRelevantFoodsAsync(string question)
+    private async Task<List<Food>> FindRelevantFoodsAsync(Guid userId, string question)
     {
         // Naive but useful keyword extraction: strip punctuation ("rice?"
         // -> "rice") and keep words longer than 3 characters to skip
@@ -180,6 +181,7 @@ public class AiContextBuilder : IAiContextBuilder
         foreach (var keyword in keywords)
         {
             var matches = await _db.Foods
+                .Where(Food.VisibleTo(userId))
                 .Where(f => EF.Functions.ILike(f.Name, SearchPatterns.Contains(keyword), SearchPatterns.EscapeCharacter))
                 .Take(3)
                 .ToListAsync();

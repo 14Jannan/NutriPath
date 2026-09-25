@@ -58,7 +58,9 @@ public class UsdaFoodSyncService : IUsdaFoodSyncService
             var failures = new List<string>();
 
             // pageSize applies per data type, so a query imports up to 3x it.
-            foreach (var dataType in GenericDataTypes)
+            // The three requests run in parallel; results are merged in the
+            // fixed type order so imports stay deterministic.
+            async Task<(string DataType, List<UsdaFoodItem>? Foods, string? Error)> Fetch(string dataType)
             {
                 var url = $"https://api.nal.usda.gov/fdc/v1/foods/search" +
                           $"?query={Uri.EscapeDataString(query)}&pageSize={pageSize}" +
@@ -66,13 +68,19 @@ public class UsdaFoodSyncService : IUsdaFoodSyncService
                 try
                 {
                     var response = await _httpClient.GetFromJsonAsync<UsdaFoodSearchResponse>(url);
-                    foods.AddRange(response?.Foods ?? new());
+                    return (dataType, response?.Foods ?? new(), null);
                 }
                 catch (HttpRequestException ex)
                 {
                     // One type failing shouldn't lose the others' results.
-                    failures.Add($"{dataType}: {ex.Message}");
+                    return (dataType, null, ex.Message);
                 }
+            }
+
+            foreach (var (dataType, fetched, error) in await Task.WhenAll(GenericDataTypes.Select(Fetch)))
+            {
+                if (fetched != null) foods.AddRange(fetched);
+                else failures.Add($"{dataType}: {error}");
             }
 
             if (failures.Count == GenericDataTypes.Length)

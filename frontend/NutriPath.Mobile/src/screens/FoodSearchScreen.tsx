@@ -16,6 +16,21 @@ export function FoodSearchScreen() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoodSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  // True once a search has taken a while: the server is looking the food
+  // up in USDA because the catalog had few matches.
+  const [slow, setSlow] = useState(false);
+
+  // Only shown when a search runs long, so quick searches don't flicker.
+  useEffect(() => {
+    if (!loading) {
+      setSlow(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlow(true), 1200);
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  const addOwnFood = () => navigation.navigate('AddFood', { mealType, date, name: query.trim() || undefined });
 
   // Debouncing: without this, every single keystroke would fire a network
   // request — typing "chicken" would trigger 7 separate searches, most of
@@ -76,6 +91,7 @@ export function FoodSearchScreen() {
         />
         {loading && <ActivityIndicator size="small" color={colors.primary} />}
       </View>
+      {slow && <Text style={styles.slowText}>Looking in the USDA food database too...</Text>}
 
       <FlatList
         data={results}
@@ -84,7 +100,26 @@ export function FoodSearchScreen() {
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
           query.trim().length >= 2 && !loading ? (
-            <Text style={styles.emptyText}>No foods found for "{query}"</Text>
+            <View style={styles.emptyBlock}>
+              <MaterialCommunityIcons name="food-off-outline" size={36} color={colors.outline} />
+              <Text style={styles.emptyText}>No foods found for "{query}"</Text>
+              <Text style={styles.emptyHint}>
+                Local dishes like kottu or hoppers aren't in the USDA database. You can add your own with the
+                nutrition from a label or a trusted source.
+              </Text>
+              <Pressable style={styles.addOwnButton} onPress={addOwnFood} accessibilityRole="button">
+                <MaterialCommunityIcons name="plus" size={18} color={colors.onPrimary} />
+                <Text style={styles.addOwnButtonText}>Add "{query.trim()}" as your own food</Text>
+              </Pressable>
+            </View>
+          ) : null
+        }
+        ListFooterComponent={
+          results.length > 0 && !loading ? (
+            <Pressable style={styles.addOwnLink} onPress={addOwnFood} accessibilityRole="button">
+              <MaterialCommunityIcons name="plus-circle-outline" size={18} color={colors.primary} />
+              <Text style={styles.addOwnLinkText}>Can't find it? Add your own food</Text>
+            </Pressable>
           ) : null
         }
         renderItem={({ item }) => (
@@ -93,7 +128,10 @@ export function FoodSearchScreen() {
             onPress={() => navigation.navigate('FoodDetail', { foodId: item.id, mealType, date })}
           >
             <View style={{ flex: 1 }}>
-              <Text style={styles.resultName}>{item.name}</Text>
+              <View style={styles.nameRow}>
+                <Text style={[styles.resultName, { flexShrink: 1 }]}>{item.name}</Text>
+                {item.isCustom && <Text style={styles.customBadge}>Added by you</Text>}
+              </View>
               <Text style={styles.resultDetail}>
                 {Math.round(item.calories)} kcal · {item.proteinGrams}g protein per {item.servingSizeGrams}g
               </Text>
@@ -133,5 +171,31 @@ const styles = StyleSheet.create({
   },
   resultName: { ...typography.labelLg, color: colors.onSurface },
   resultDetail: { ...typography.bodySm, color: colors.onSurfaceVariant, marginTop: 2 },
-  emptyText: { ...typography.bodyMd, color: colors.onSurfaceVariant, textAlign: 'center', marginTop: spacing.lg },
+  emptyText: { ...typography.bodyMd, color: colors.onSurfaceVariant, textAlign: 'center', marginTop: spacing.sm },
+  emptyBlock: { alignItems: 'center', gap: spacing.xs, marginTop: spacing.lg, paddingHorizontal: spacing.sm },
+  emptyHint: { ...typography.bodySm, color: colors.onSurfaceVariant, textAlign: 'center', maxWidth: 360 },
+  slowText: { ...typography.bodySm, color: colors.onSurfaceVariant, marginHorizontal: spacing.margin, marginTop: spacing.xs },
+  addOwnButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    minHeight: 44,
+    borderRadius: radii.pill,
+    marginTop: spacing.sm,
+  },
+  addOwnButtonText: { ...typography.labelLg, color: colors.onPrimary },
+  addOwnLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, marginTop: spacing.xs },
+  addOwnLinkText: { ...typography.labelLg, color: colors.primary },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' },
+  customBadge: {
+    ...typography.labelSm,
+    color: colors.primary,
+    backgroundColor: colors.secondaryFixed,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
+    overflow: 'hidden',
+  },
 });

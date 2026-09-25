@@ -4,12 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getFoodById, FoodSearchResult } from '@/api/foodsApi';
+import { deleteFood, getFoodById, FoodSearchResult } from '@/api/foodsApi';
 import { logMealItem } from '@/api/mealsApi';
 import { Button } from '@/components/Button';
 import { LogStackParamList } from '@/navigation/LogStackNavigator';
 import { colors, typography, spacing, radii } from '@/theme';
-import { showAlert } from '@/utils/alert';
+import { confirmAction, showAlert } from '@/utils/alert';
 import { describeApiError } from '@/api/client';
 
 export function FoodDetailScreen() {
@@ -53,6 +53,24 @@ export function FoodDetailScreen() {
     fat: Math.round(food.fatGrams * scale * 10) / 10,
     fiber: Math.round(food.fiberGrams * scale * 10) / 10,
   };
+
+  function handleDelete() {
+    confirmAction(
+      'Delete this food?',
+      `"${food!.name}" will be removed from your foods.`,
+      'Delete',
+      async () => {
+        try {
+          await deleteFood(food!.id);
+          showAlert('Food deleted', undefined, 'success');
+          navigation.goBack();
+        } catch (error) {
+          showAlert("Couldn't delete the food", describeApiError(error));
+        }
+      },
+      true
+    );
+  }
 
   async function handleAdd() {
     if (saving) return; // ignore double taps while the first request is in flight
@@ -121,6 +139,13 @@ export function FoodDetailScreen() {
           onPress={handleAdd}
           style={{ marginTop: spacing.lg }}
         />
+
+        {food.isCustom && (
+          <Pressable style={styles.deleteLink} onPress={handleDelete} accessibilityRole="button">
+            <MaterialCommunityIcons name="trash-can-outline" size={16} color={colors.amberCaution} />
+            <Text style={styles.deleteText}>Delete this food</Text>
+          </Pressable>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -152,5 +177,7 @@ const styles = StyleSheet.create({
   macroGrid: { flexDirection: 'row', justifyContent: 'space-around' },
   macroCell: { alignItems: 'center' },
   macroValue: { ...typography.headlineMd, fontSize: 16, color: colors.onSurface },
+  deleteLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, marginTop: spacing.sm },
+  deleteText: { ...typography.labelMd, color: colors.amberCaution },
   macroLabel: { ...typography.labelSm, color: colors.onSurfaceVariant },
 });

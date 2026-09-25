@@ -46,6 +46,13 @@ public class NutriPathDbContext : DbContext
             .HasIndex(f => new { f.DataSourceId, f.ExternalId })
             .IsUnique();
 
+        // User-added foods belong to that user and go when the account does.
+        modelBuilder.Entity<Food>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(f => f.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         // One Meal has many MealItems. Naming the MealItem.Meal navigation
         // here ties both sides to the same MealId foreign key — without it,
         // EF would infer a second relationship and add a shadow MealId1.
