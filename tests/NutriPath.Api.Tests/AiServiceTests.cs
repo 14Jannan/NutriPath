@@ -35,6 +35,9 @@ public class AiServiceTests
         }
     }
 
+    // Test-only key: base64 of "nutripath-test-encryption-key-01" (32 bytes).
+    internal static readonly AesGcmMessageProtector Protector = new("bnV0cmlwYXRoLXRlc3QtZW5jcnlwdGlvbi1rZXktMDE=");
+
     private static readonly ClientClock Clock =
         new(new DateOnly(2026, 9, 25), new DateTimeOffset(2026, 9, 25, 19, 30, 0, TimeSpan.FromHours(5.5)));
 
@@ -43,7 +46,7 @@ public class AiServiceTests
         var db = TestDb.Create();
         var groq = new FakeGroq();
         var context = new FakeContext();
-        return (new AiService(context, new FakeRetrieval(), groq, db), groq, context, db);
+        return (new AiService(context, new FakeRetrieval(), groq, db, Protector), groq, context, db);
     }
 
     [Fact]

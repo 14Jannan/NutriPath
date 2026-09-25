@@ -121,6 +121,17 @@ builder.Services.AddScoped<IWeeklyScoreService, WeeklyScoreService>();
 builder.Services.AddScoped<IAiContextBuilder, AiContextBuilder>();
 builder.Services.AddScoped<IAiService, AiService>();
 
+// Chat messages are encrypted at rest with this key. It lives in user
+// secrets (dev) or the Encryption__MessageKey environment variable (prod),
+// never in the repo. Losing it makes stored chats unreadable, so it's
+// required up front rather than failing on the first message.
+var messageKey = builder.Configuration["Encryption:MessageKey"];
+if (string.IsNullOrWhiteSpace(messageKey))
+    throw new InvalidOperationException(
+        "Encryption:MessageKey is not configured. Generate one with: " +
+        "dotnet user-secrets set \"Encryption:MessageKey\" \"<32 random bytes, base64>\"");
+builder.Services.AddSingleton<IMessageProtector>(new AesGcmMessageProtector(messageKey));
+
 // Singleton: the TF-IDF index is built once and shared by every request.
 // It depends on the Scoped DbContext only via a short-lived scope.
 builder.Services.AddSingleton<IKnowledgeRetrievalService, KnowledgeRetrievalService>();
@@ -176,6 +187,12 @@ using (var scope = app.Services.CreateScope())
             db.SaveChanges();
         }
     }
+
+    // Encrypt any chat messages saved before encryption was added.
+    var protector = scope.ServiceProvider.GetRequiredService<IMessageProtector>();
+    var encrypted = MessageEncryptionMigrator.EncryptExistingAsync(db, protector).GetAwaiter().GetResult();
+    if (encrypted > 0)
+        app.Logger.LogInformation("Encrypted {Count} previously unencrypted chat messages.", encrypted);
 }
 
 if (app.Environment.IsDevelopment())

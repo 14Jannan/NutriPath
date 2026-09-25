@@ -26,6 +26,8 @@ public class NutriPathApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:Key", "test-only-signing-key-that-is-long-enough-for-hmac-sha256");
         builder.UseSetting("Jwt:Issuer", "NutriPath.Api");
         builder.UseSetting("Jwt:Audience", "NutriPath.Client");
+        // A fixed, test-only 32-byte key (base64 of "nutripath-test-encryption-key-01").
+        builder.UseSetting("Encryption:MessageKey", "bnV0cmlwYXRoLXRlc3QtZW5jcnlwdGlvbi1rZXktMDE=");
 
         builder.ConfigureServices(services =>
         {

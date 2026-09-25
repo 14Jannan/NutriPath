@@ -19,17 +19,22 @@ public class AiService : IAiService
     private readonly IKnowledgeRetrievalService _retrieval;
     private readonly IGroqClient _groqClient;
     private readonly NutriPathDbContext _db;
+    // Chat text is private, so it's encrypted before it reaches the
+    // database and decrypted only when shown to its owner or sent to the AI.
+    private readonly IMessageProtector _protector;
 
     public AiService(
         IAiContextBuilder contextBuilder,
         IKnowledgeRetrievalService retrieval,
         IGroqClient groqClient,
-        NutriPathDbContext db)
+        NutriPathDbContext db,
+        IMessageProtector protector)
     {
         _contextBuilder = contextBuilder;
         _retrieval = retrieval;
         _groqClient = groqClient;
         _db = db;
+        _protector = protector;
     }
 
     // How many earlier messages are sent to the AI as memory: enough for
@@ -62,10 +67,11 @@ public class AiService : IAiService
                     .ToListAsync())
                 .AsEnumerable()
                 .Reverse()
+                .Select(m => new { m.Role, Text = _protector.Unprotect(m.Content) })
                 .Select(m => new GroqMessage
                 {
                     Role = m.Role == AiMessageRole.User ? "user" : "assistant",
-                    Content = m.Content.Length > HistoryMessageMaxChars ? m.Content[..HistoryMessageMaxChars] : m.Content,
+                    Content = m.Text.Length > HistoryMessageMaxChars ? m.Text[..HistoryMessageMaxChars] : m.Text,
                 })
                 .ToList();
 
@@ -132,20 +138,21 @@ public class AiService : IAiService
         {
             ConversationId = conversation.Id,
             Role = AiMessageRole.User,
-            Content = question,
+            Content = _protector.Protect(question),
         });
         _db.AiMessages.Add(new AiMessage
         {
             ConversationId = conversation.Id,
             Role = AiMessageRole.Assistant,
-            Content = answer,
+            Content = _protector.Protect(answer),
             // Stored so any answer can later be audited against the exact
-            // grounding data and knowledge chunks the model was given.
-            RetrievedContextJson = JsonSerializer.Serialize(new
+            // grounding data and knowledge chunks the model was given. It
+            // holds the user's health data too, so it's encrypted as well.
+            RetrievedContextJson = _protector.Protect(JsonSerializer.Serialize(new
             {
                 structuredContext = JsonDocument.Parse(structuredContextJson).RootElement,
                 knowledgeChunks = sources,
-            }),
+            })),
         });
 
         await _db.SaveChangesAsync();
@@ -182,7 +189,7 @@ public class AiService : IAiService
             .ToListAsync();
 
         return rows
-            .Select(r => new ConversationSummary(r.Id, TitleFrom(r.FirstQuestion), r.StartedAtUtc, r.Last, r.Count))
+            .Select(r => new ConversationSummary(r.Id, TitleFrom(Decrypt(r.FirstQuestion)), r.StartedAtUtc, r.Last, r.Count))
             .ToList();
     }
 
@@ -191,39 +198,38 @@ public class AiService : IAiService
         if (!await _db.AiConversations.AnyAsync(c => c.Id == conversationId && c.UserId == userId))
             throw new KeyNotFoundException("Conversation not found.");
 
-        return await _db.AiMessages
-            .Where(m => m.ConversationId == conversationId)
-            .OrderBy(m => m.CreatedAtUtc)
-            .ThenBy(m => m.Role)
-            .Select(m => new ChatHistoryMessage(m.Id, m.Role.ToString(), m.Content, m.CreatedAtUtc))
-            .ToListAsync();
+        return await ReadMessagesAsync(conversationId);
     }
 
     public async Task<List<ChatSearchResult>> SearchAsync(Guid userId, string query)
     {
         query = query.Trim();
         if (query.Length < 2) return new List<ChatSearchResult>();
-        var lowered = query.ToLower();
 
-        // Case-insensitive "contains" (translated to SQL), newest first.
-        var matches = await _db.AiMessages
-            .Where(m => m.Conversation!.UserId == userId && m.Content.ToLower().Contains(lowered))
-            .OrderByDescending(m => m.CreatedAtUtc)
-            .Take(30)
-            .Select(m => new { m.Id, m.ConversationId, m.Role, m.Content, m.CreatedAtUtc })
-            .ToListAsync();
+        // Messages are encrypted, so the database can't search their text.
+        // Instead only THIS user's messages are loaded and searched after
+        // decrypting — fine at one person's chat volume, and nobody else's
+        // messages are ever decrypted for them.
+        var messages = (await _db.AiMessages
+                .Where(m => m.Conversation!.UserId == userId)
+                .OrderByDescending(m => m.CreatedAtUtc)
+                .Select(m => new { m.Id, m.ConversationId, m.Role, m.Content, m.CreatedAtUtc })
+                .ToListAsync())
+            .Select(m => new { m.Id, m.ConversationId, m.Role, Text = _protector.Unprotect(m.Content), m.CreatedAtUtc })
+            .ToList();
 
-        var conversationIds = matches.Select(m => m.ConversationId).Distinct().ToList();
-        var titles = await _db.AiMessages
-            .Where(m => conversationIds.Contains(m.ConversationId) && m.Role == AiMessageRole.User)
+        // Each conversation's title is its earliest question.
+        var titles = messages
+            .Where(m => m.Role == AiMessageRole.User)
             .GroupBy(m => m.ConversationId)
-            .Select(g => new { g.Key, First = g.OrderBy(m => m.CreatedAtUtc).Select(m => m.Content).First() })
-            .ToDictionaryAsync(x => x.Key, x => x.First);
+            .ToDictionary(g => g.Key, g => g.OrderBy(m => m.CreatedAtUtc).First().Text);
 
-        return matches
+        return messages
+            .Where(m => m.Text.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Take(30)
             .Select(m => new ChatSearchResult(
                 m.ConversationId, TitleFrom(titles.GetValueOrDefault(m.ConversationId)), m.Id,
-                m.Role.ToString(), Snippet(m.Content, query), m.CreatedAtUtc))
+                m.Role.ToString(), Snippet(m.Text, query), m.CreatedAtUtc))
             .ToList();
     }
 
@@ -234,6 +240,20 @@ public class AiService : IAiService
         _db.AiConversations.Remove(conversation); // messages cascade
         await _db.SaveChangesAsync();
     }
+
+    private string? Decrypt(string? stored) => stored == null ? null : _protector.Unprotect(stored);
+
+    // Both messages of a turn get almost the same timestamp, so Role
+    // breaks ties to keep each question ahead of its answer.
+    private async Task<List<ChatHistoryMessage>> ReadMessagesAsync(Guid conversationId) =>
+        (await _db.AiMessages
+            .Where(m => m.ConversationId == conversationId)
+            .OrderBy(m => m.CreatedAtUtc)
+            .ThenBy(m => m.Role)
+            .Select(m => new { m.Id, m.Role, m.Content, m.CreatedAtUtc })
+            .ToListAsync())
+        .Select(m => new ChatHistoryMessage(m.Id, m.Role.ToString(), _protector.Unprotect(m.Content), m.CreatedAtUtc))
+        .ToList();
 
     // A conversation is named after its first question, shortened.
     private static string TitleFrom(string? firstQuestion)
@@ -265,13 +285,6 @@ public class AiService : IAiService
 
         if (conversationId == null) return new List<ChatHistoryMessage>();
 
-        // Both messages of a turn get almost the same timestamp, so Role
-        // breaks ties to keep each question ahead of its answer.
-        return await _db.AiMessages
-            .Where(m => m.ConversationId == conversationId)
-            .OrderBy(m => m.CreatedAtUtc)
-            .ThenBy(m => m.Role)
-            .Select(m => new ChatHistoryMessage(m.Id, m.Role.ToString(), m.Content, m.CreatedAtUtc))
-            .ToListAsync();
+        return await ReadMessagesAsync(conversationId.Value);
     }
 }
