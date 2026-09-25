@@ -126,6 +126,9 @@ builder.Services.AddScoped<IAiService, AiService>();
 builder.Services.AddSingleton<IKnowledgeRetrievalService, KnowledgeRetrievalService>();
 
 builder.Services.AddHttpClient<IUsdaFoodSyncService, UsdaFoodSyncService>();
+
+// Imports everyday foods on startup when the catalog is nearly empty.
+builder.Services.AddHostedService<StarterFoodCatalogSeeder>();
 builder.Services.AddHttpClient<IGroqClient, GroqClient>();
 
 builder.Services.AddDbContext<NutriPathDbContext>(options =>

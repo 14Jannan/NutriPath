@@ -23,7 +23,12 @@ public class FoodSearchService : IFoodSearchService
         // LIKE on Postgres by default — a real, easy-to-miss gotcha.
         var results = await _db.Foods
             .Where(f => EF.Functions.ILike(f.Name, SearchPatterns.Contains(query), SearchPatterns.EscapeCharacter))
-            .OrderBy(f => f.Name)
+            // Best matches first: names that START with the query ("Rice,
+            // white, cooked" before "Crackers, rice"), then shorter, more
+            // general names before long, specific ones.
+            .OrderBy(f => EF.Functions.ILike(f.Name, SearchPatterns.StartsWith(query), SearchPatterns.EscapeCharacter) ? 0 : 1)
+            .ThenBy(f => f.Name.Length)
+            .ThenBy(f => f.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(ToDto)

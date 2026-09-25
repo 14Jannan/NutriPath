@@ -1,6 +1,7 @@
 import React, { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
+import { AxiosError, AxiosHeaders } from 'axios';
 import * as profileApi from '@/api/profileApi';
 import * as authApi from '@/api/authApi';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
@@ -71,6 +72,24 @@ describe('AuthContext profile gate', () => {
     await act(() => result.current.loginUser('a@b.com', 'pw'));
 
     expect(result.current.profileStatus).toBe('error');
+  });
+
+  it('logs out a saved session whose account no longer exists', async () => {
+    mockTokens.set('nutripath.accessToken', 'saved');
+    api.getMyProfile.mockRejectedValue(
+      new AxiosError('Not Found', '404', undefined, undefined, {
+        status: 404,
+        data: {},
+        statusText: '',
+        headers: {},
+        config: { headers: new AxiosHeaders() },
+      })
+    );
+
+    const { result } = await renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => expect(result.current.isLoggedIn).toBe(false));
+    expect(auth.logout).toHaveBeenCalled();
   });
 
   it('unlocks the app once setup is saved', async () => {

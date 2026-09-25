@@ -11,12 +11,13 @@ public static class SearchPatterns
     /// escaped, so a typed % or _ is matched literally instead of acting as
     /// a wildcard. Use with <see cref="EscapeCharacter"/>.
     /// </summary>
-    public static string Contains(string text)
-    {
-        var escaped = text
-            .Replace(@"\", @"\\")
-            .Replace("%", @"\%")
-            .Replace("_", @"\_");
-        return $"%{escaped}%";
-    }
+    public static string Contains(string text) => $"%{Escape(text)}%";
+
+    /// <summary>A "starts with" pattern, escaped the same way.</summary>
+    public static string StartsWith(string text) => $"{Escape(text)}%";
+
+    private static string Escape(string text) => text
+        .Replace(@"\", @"\\")
+        .Replace("%", @"\%")
+        .Replace("_", @"\_");
 }

@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios';
 import React, { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import * as SecureStore from '@/api/tokenStorage';
 import { ACCESS_TOKEN_KEY } from '@/api/client';
@@ -39,11 +40,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setFullName(profile.fullName ?? '');
       // Targets are only calculated once the goals form has been saved.
       setProfileStatus(profile.targetCalories > 0 ? 'complete' : 'incomplete');
-    } catch {
-      // If the session couldn't be renewed, the client has cleared the
-      // tokens: that's a logout, not a connection problem.
-      if (!(await SecureStore.getItemAsync(ACCESS_TOKEN_KEY))) {
+    } catch (error) {
+      // 404: the account no longer exists (e.g. deleted), so the saved
+      // login is useless. 401 here means the session couldn't be renewed.
+      // Both are a logout, not a connection problem.
+      const status = isAxiosError(error) ? error.response?.status : undefined;
+      if (status === 404 || status === 401 || !(await SecureStore.getItemAsync(ACCESS_TOKEN_KEY))) {
+        await authApi.logout();
         setIsLoggedIn(false);
+        setProfileStatus('checking');
         return;
       }
       setProfileStatus('error');
