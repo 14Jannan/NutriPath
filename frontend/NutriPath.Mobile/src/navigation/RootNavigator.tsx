@@ -35,7 +35,7 @@ function ProfileCheckFailed() {
       <Text style={styles.title}>Can't reach NutriPath</Text>
       <Text style={styles.body}>Check your connection and that the backend is running, then try again.</Text>
       <Button label="Try again" onPress={refreshProfileStatus} style={{ marginTop: spacing.md, maxWidth: 320 }} />
-      <Button label="Log out" variant="secondary" onPress={logoutUser} style={{ marginTop: spacing.sm, maxWidth: 320 }} />
+      <Button label="Log out" variant="danger" onPress={logoutUser} style={{ marginTop: spacing.sm, maxWidth: 320 }} />
     </View>
   );
 }

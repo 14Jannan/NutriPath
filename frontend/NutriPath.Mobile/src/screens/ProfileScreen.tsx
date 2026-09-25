@@ -142,7 +142,7 @@ export function ProfileScreen() {
           </Card>
         )}
 
-        <Button label="Log Out" variant="secondary" onPress={logoutUser} style={{ marginTop: spacing.lg }} />
+        <Button label="Log Out" variant="danger" onPress={logoutUser} style={{ marginTop: spacing.lg }} />
       </ScrollView>
 
       <AvatarPickerSheet
