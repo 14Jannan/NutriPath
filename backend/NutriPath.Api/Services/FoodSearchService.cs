@@ -81,6 +81,35 @@ public class FoodSearchService : IFoodSearchService
         return (await GetByIdAsync(userId, food.Id))!;
     }
 
+    public async Task<FoodSearchResultDto> UpdateCustomAsync(Guid userId, Guid foodId, CreateFoodRequest request)
+    {
+        // Only the owner's own foods; shared catalog foods can't be edited.
+        var food = await _db.Foods.FirstOrDefaultAsync(f => f.Id == foodId && f.CreatedByUserId == userId)
+            ?? throw new KeyNotFoundException("Food not found.");
+
+        var name = (request.Name ?? string.Empty).Trim();
+        Validate(name, request);
+
+        var nameLower = name.ToLower();
+        if (await _db.Foods.AnyAsync(f => f.CreatedByUserId == userId && f.Id != foodId && f.Name.ToLower() == nameLower))
+            throw new ArgumentException($"You already added a food called \"{name}\".");
+
+        // Meals already logged with this food keep their numbers: each
+        // MealItem stores a snapshot, so past days' totals never change.
+        food.Name = name;
+        food.Calories = request.Calories;
+        food.ProteinGrams = request.ProteinGrams;
+        food.CarbsGrams = request.CarbsGrams;
+        food.FatGrams = request.FatGrams;
+        food.FiberGrams = request.FiberGrams ?? 0;
+        food.SugarGrams = request.SugarGrams ?? 0;
+        food.SodiumMilligrams = request.SodiumMilligrams ?? 0;
+        food.LastUpdatedAtUtc = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return (await GetByIdAsync(userId, food.Id))!;
+    }
+
     public async Task DeleteCustomAsync(Guid userId, Guid foodId)
     {
         var food = await _db.Foods.FirstOrDefaultAsync(f => f.Id == foodId && f.CreatedByUserId == userId)

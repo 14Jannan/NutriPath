@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
-import { createFood } from '@/api/foodsApi';
+import { createFood, getFoodById, NewFood, updateFood } from '@/api/foodsApi';
 import { describeApiError } from '@/api/client';
 import { LogStackParamList } from '@/navigation/LogStackNavigator';
 import { showAlert } from '@/utils/alert';
@@ -45,9 +45,10 @@ function NumberField({ label, unit, value, onChange, optional }: FieldProps) {
 }
 
 /**
- * Adds a private food the catalog doesn't have, e.g. a local dish. Values
- * are per 100 g, like most package labels. The server checks they're
- * plausible; the food is only ever visible to the user who adds it.
+ * Adds a private food the catalog doesn't have, e.g. a local dish, or edits
+ * one of the user's own foods (when opened with a foodId). Values are per
+ * 100 g, like most package labels. The server checks they're plausible;
+ * the food is only ever visible to the user who adds it.
  */
 export function AddFoodScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LogStackParamList>>();
@@ -62,6 +63,32 @@ export function AddFoodScreen() {
   const [sugar, setSugar] = useState('');
   const [sodium, setSodium] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const editing = !!params.foodId;
+  const [loading, setLoading] = useState(editing);
+
+  // Editing: fill the form with the food's current values.
+  useEffect(() => {
+    if (!params.foodId) return;
+    const text = (n: number) => String(n);
+    getFoodById(params.foodId)
+      .then((food) => {
+        setName(food.name);
+        setCalories(text(food.calories));
+        setProtein(text(food.proteinGrams));
+        setCarbs(text(food.carbsGrams));
+        setFat(text(food.fatGrams));
+        // 0 for an optional value means it wasn't given; show it blank.
+        setFiber(food.fiberGrams ? text(food.fiberGrams) : '');
+        setSugar(food.sugarGrams ? text(food.sugarGrams) : '');
+        setSodium(food.sodiumMilligrams ? text(food.sodiumMilligrams) : '');
+      })
+      .catch((error) => {
+        showAlert("Couldn't load the food", describeApiError(error));
+        navigation.goBack();
+      })
+      .finally(() => setLoading(false));
+  }, [params.foodId, navigation]);
 
   const num = (v: string) => (v.trim() === '' ? undefined : Number(v));
   const required = [calories, protein, carbs, fat];
@@ -79,22 +106,29 @@ export function AddFoodScreen() {
   async function save() {
     if (!complete || saving) return;
     setSaving(true);
+    const values: NewFood = {
+      name: name.trim(),
+      calories: Number(calories),
+      proteinGrams: Number(protein),
+      carbsGrams: Number(carbs),
+      fatGrams: Number(fat),
+      fiberGrams: num(fiber),
+      sugarGrams: num(sugar),
+      sodiumMilligrams: num(sodium),
+    };
     try {
-      const food = await createFood({
-        name: name.trim(),
-        calories: Number(calories),
-        proteinGrams: Number(protein),
-        carbsGrams: Number(carbs),
-        fatGrams: Number(fat),
-        fiberGrams: num(fiber),
-        sugarGrams: num(sugar),
-        sodiumMilligrams: num(sodium),
-      });
-      showAlert('Food added', `${food.name} is saved to your foods.`, 'success');
-      // Straight to choosing the portion, so it can be logged right away.
-      navigation.replace('FoodDetail', { foodId: food.id, mealType: params.mealType, date: params.date });
+      if (params.foodId) {
+        const food = await updateFood(params.foodId, values);
+        showAlert('Food updated', `${food.name} is saved. Meals you already logged keep their original values.`, 'success');
+        navigation.goBack(); // back to the food, which reloads with the new values
+      } else {
+        const food = await createFood(values);
+        showAlert('Food added', `${food.name} is saved to your foods.`, 'success');
+        // Straight to choosing the portion, so it can be logged right away.
+        navigation.replace('FoodDetail', { foodId: food.id, mealType: params.mealType, date: params.date });
+      }
     } catch (error) {
-      showAlert("Couldn't add the food", describeApiError(error));
+      showAlert(params.foodId ? "Couldn't save the changes" : "Couldn't add the food", describeApiError(error));
       setSaving(false);
     }
   }
@@ -105,15 +139,21 @@ export function AddFoodScreen() {
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton} accessibilityLabel="Back">
           <MaterialCommunityIcons name="arrow-left" size={22} color={colors.onSurface} />
         </Pressable>
-        <Text style={styles.headerTitle}>Add your own food</Text>
+        <Text style={styles.headerTitle}>{editing ? 'Edit your food' : 'Add your own food'}</Text>
       </View>
+
+      {loading ? (
+        <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} />
+      ) : (
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.notice}>
             <MaterialCommunityIcons name="lock-outline" size={18} color={colors.primary} />
             <Text style={styles.noticeText}>
-              Only you can see this food. Use values from a package label or a trusted source, per 100 g.
+              {editing
+                ? 'Changes apply to future logs. Meals you already logged keep their original values.'
+                : 'Only you can see this food. Use values from a package label or a trusted source, per 100 g.'}
             </Text>
           </View>
 
@@ -152,12 +192,13 @@ export function AddFoodScreen() {
 
         <View style={styles.footer}>
           <Button
-            label={saving ? 'Saving...' : 'Save and choose portion'}
+            label={saving ? 'Saving...' : editing ? 'Save changes' : 'Save and choose portion'}
             onPress={save}
             disabled={!complete || saving || mismatch}
           />
         </View>
       </KeyboardAvoidingView>
+      )}
     </SafeAreaView>
   );
 }

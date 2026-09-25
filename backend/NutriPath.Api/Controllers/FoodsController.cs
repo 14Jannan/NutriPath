@@ -73,6 +73,30 @@ public class FoodsController : ControllerBase
         }
     }
 
+    /// <summary>Edits one of the user's own foods (same fields and checks as adding one).</summary>
+    /// <remarks>Meals already logged keep their original values; only future logs use the new ones.</remarks>
+    /// <response code="400">A value is implausible, or the user already has another food with that name.</response>
+    /// <response code="404">No such food of the user's own (shared catalog foods can't be edited).</response>
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType<FoodSearchResultDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Update(Guid id, [FromBody] CreateFoodRequest request)
+    {
+        try
+        {
+            return Ok(await _foodSearch.UpdateCustomAsync(CurrentUserId, id, request));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     /// <summary>Deletes one of the user's own foods, if it isn't used in their meal log.</summary>
     /// <response code="404">No such food of the user's own.</response>
     /// <response code="409">The food is in the meal log.</response>

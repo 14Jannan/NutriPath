@@ -73,6 +73,46 @@ public class CustomFoodTests
     }
 
     [Fact]
+    public async Task Update_ChangesOwnFood_ButLoggedMealsKeepTheirValues()
+    {
+        using var db = TestDb.Create();
+        var user = TestDb.AddUser(db);
+        var service = new FoodSearchService(db);
+        var food = await service.CreateCustomAsync(user.Id, Kottu());
+        var logged = await new MealService(db).LogItemAsync(
+            user.Id, new LogMealItemRequest(food.Id, 100, "Dinner", new DateOnly(2026, 9, 25)));
+
+        // Corrected recipe: more fat. 4*(9+24) + 9*12 = 240 kcal.
+        var updated = await service.UpdateCustomAsync(user.Id, food.Id,
+            new CreateFoodRequest("Chicken kottu (home)", 240, 9, 24, 12, FiberGrams: 2));
+
+        Assert.Equal("Chicken kottu (home)", updated.Name);
+        Assert.Equal(240m, updated.Calories);
+        Assert.Equal(0m, updated.SugarGrams); // optional value cleared
+        Assert.Equal(205m, logged.Calories);
+        Assert.Equal(205m, db.MealItems.Single().CaloriesSnapshot); // history unchanged
+    }
+
+    [Fact]
+    public async Task Update_OnlyOwnFoods_WithTheSameChecksAsAdding()
+    {
+        using var db = TestDb.Create();
+        var owner = TestDb.AddUser(db);
+        var other = TestDb.AddUser(db);
+        var service = new FoodSearchService(db);
+        var food = await service.CreateCustomAsync(owner.Id, Kottu());
+        await service.CreateCustomAsync(owner.Id, Kottu("Egg hopper"));
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.UpdateCustomAsync(other.Id, food.Id, Kottu()));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.UpdateCustomAsync(owner.Id, food.Id, new CreateFoodRequest("Chicken kottu", 30, 7, 25, 8)));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.UpdateCustomAsync(owner.Id, food.Id, Kottu("egg hopper")));
+
+        // Keeping its own name is fine.
+        await service.UpdateCustomAsync(owner.Id, food.Id, Kottu());
+    }
+
+    [Fact]
     public async Task Delete_OnlyOwnFoods_AndNotOnesInTheLog()
     {
         using var db = TestDb.Create();
@@ -112,6 +152,7 @@ public class FoodLookupTests
 
         public Task<FoodSearchResultDto?> GetByIdAsync(Guid userId, Guid foodId) => throw new NotImplementedException();
         public Task<FoodSearchResultDto> CreateCustomAsync(Guid userId, CreateFoodRequest request) => throw new NotImplementedException();
+        public Task<FoodSearchResultDto> UpdateCustomAsync(Guid userId, Guid foodId, CreateFoodRequest request) => throw new NotImplementedException();
         public Task DeleteCustomAsync(Guid userId, Guid foodId) => throw new NotImplementedException();
     }
 

@@ -10,8 +10,9 @@ export type LogStackParamList = {
   // `date` is the local yyyy-MM-dd day being logged into, chosen on LogHome.
   FoodSearch: { mealType: string; date: string };
   FoodDetail: { foodId: string; mealType: string; date: string };
-  // For foods the catalog doesn't have; `name` pre-fills from the search.
-  AddFood: { mealType: string; date: string; name?: string };
+  // Adds a food the catalog doesn't have (`name` pre-fills from the
+  // search), or edits one of the user's own foods when `foodId` is set.
+  AddFood: { mealType: string; date: string; name?: string; foodId?: string };
 };
 
 const Stack = createNativeStackNavigator<LogStackParamList>();

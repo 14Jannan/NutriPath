@@ -14,6 +14,13 @@ public interface IFoodSearchService
     Task<FoodSearchResultDto> CreateCustomAsync(Guid userId, CreateFoodRequest request);
 
     /// <summary>
+    /// Updates one of the user's own foods. Throws KeyNotFoundException if it isn't theirs,
+    /// ArgumentException for implausible values or a name they already use.
+    /// Already-logged meals keep their original values (they store a snapshot).
+    /// </summary>
+    Task<FoodSearchResultDto> UpdateCustomAsync(Guid userId, Guid foodId, CreateFoodRequest request);
+
+    /// <summary>
     /// Deletes one of the user's own foods. Throws KeyNotFoundException if it isn't theirs,
     /// InvalidOperationException if it's used in their meal log.
     /// </summary>

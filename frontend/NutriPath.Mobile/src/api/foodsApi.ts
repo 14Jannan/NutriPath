@@ -44,6 +44,12 @@ export async function createFood(food: NewFood): Promise<FoodSearchResult> {
   return response.data;
 }
 
+// Edits one of the user's own foods. Meals already logged keep their values.
+export async function updateFood(id: string, food: NewFood): Promise<FoodSearchResult> {
+  const response = await apiClient.put<FoodSearchResult>(`/api/foods/${id}`, food);
+  return response.data;
+}
+
 // Deletes one of the user's own foods (not allowed if it's in their log).
 export async function deleteFood(id: string): Promise<void> {
   await apiClient.delete(`/api/foods/${id}`);

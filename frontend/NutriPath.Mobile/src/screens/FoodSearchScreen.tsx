@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { searchFoods, FoodSearchResult } from '@/api/foodsApi';
@@ -15,6 +15,16 @@ export function FoodSearchScreen() {
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoodSearchResult[]>([]);
+  // Bumped when the screen regains focus, so results reflect any food the
+  // user just added, edited or deleted.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const focusedBefore = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (focusedBefore.current) setRefreshKey((k) => k + 1);
+      focusedBefore.current = true;
+    }, [])
+  );
   const [loading, setLoading] = useState(false);
   // True once a search has taken a while: the server is looking the food
   // up in USDA because the catalog had few matches.
@@ -68,7 +78,7 @@ export function FoodSearchScreen() {
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [query]);
+  }, [query, refreshKey]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
