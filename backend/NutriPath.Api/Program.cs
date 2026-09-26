@@ -14,6 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
 builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"));
+builder.Services.Configure<AiUsageSettings>(builder.Configuration.GetSection("AiUsage"));
 builder.Services.AddScoped<IFoodSearchService, FoodSearchService>();
 builder.Services.AddScoped<IFoodLookupService, FoodLookupService>();
 // Remembers which terms were recently looked up in USDA (see FoodLookupService).
@@ -123,6 +124,7 @@ builder.Services.AddScoped<INutritionCalculationService, NutritionCalculationSer
 builder.Services.AddScoped<IWeeklyScoreService, WeeklyScoreService>();
 builder.Services.AddScoped<IAiContextBuilder, AiContextBuilder>();
 builder.Services.AddScoped<IAiService, AiService>();
+builder.Services.AddScoped<IAiUsageService, AiUsageService>();
 
 // Chat messages are encrypted at rest with this key. It lives in user
 // secrets (dev) or the Encryption__MessageKey environment variable (prod),

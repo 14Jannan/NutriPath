@@ -6,7 +6,10 @@ namespace NutriPath.Api.DTOs;
 /// <param name="ConversationId">Continue this conversation; omit to continue the most recent one.</param>
 public record ChatRequest(
     string Question, DateOnly? LocalDate = null, DateTimeOffset? LocalDateTime = null, Guid? ConversationId = null);
-public record ChatResponse(string Answer, List<string> SourcesUsed, Guid ConversationId);
+public record ChatResponse(string Answer, List<string> SourcesUsed, Guid ConversationId, AiUsageStatus? Usage = null);
+
+/// <summary>The user's assistant allowance. ResetsAtUtc is set only while Locked.</summary>
+public record AiUsageStatus(int TokensUsed, int TokenLimit, int WindowHours, bool Locked, DateTime? ResetsAtUtc);
 public record ChatHistoryMessage(Guid Id, string Role, string Content, DateTime CreatedAtUtc);
 
 /// <summary>One past conversation in the history list. Title is its first question.</summary>

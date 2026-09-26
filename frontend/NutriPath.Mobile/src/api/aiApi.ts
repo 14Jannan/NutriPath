@@ -3,11 +3,23 @@ import { toLocalIsoDateTime } from '@/utils/date';
 
 // These shapes mirror DTOs/AiDtos.cs.
 
+// The user's assistant allowance: a token limit over a rolling window.
+export interface AiUsageStatus {
+  tokensUsed: number;
+  tokenLimit: number;
+  windowHours: number;
+  locked: boolean;
+  // When chatting is possible again; only set while locked.
+  resetsAtUtc: string | null;
+}
+
 export interface ChatResponse {
   answer: string;
   sourcesUsed: string[];
   // The conversation this answer was saved to.
   conversationId: string;
+  // Usage after this answer.
+  usage?: AiUsageStatus | null;
 }
 
 export interface ChatHistoryMessage {
@@ -47,6 +59,11 @@ export async function askAssistant(question: string, conversationId?: string | n
     localDateTime: toLocalIsoDateTime(),
     conversationId: conversationId ?? undefined,
   });
+  return response.data;
+}
+
+export async function getUsage(): Promise<AiUsageStatus> {
+  const response = await apiClient.get<AiUsageStatus>('/api/ai/usage');
   return response.data;
 }
 

@@ -123,7 +123,8 @@ public class AiService : IAiService
             $"USER'S QUESTION:\n{question}";
 
         // ---- 4. Call Groq, with the conversation so far as memory ----
-        var answer = await _groqClient.AskAsync(systemPrompt, userPrompt, history);
+        var reply = await _groqClient.AskAsync(systemPrompt, userPrompt, history);
+        var answer = reply.Text;
 
         // ---- 5. Persist the conversation, WITH what was retrieved ----
         if (conversation == null)
@@ -154,6 +155,8 @@ public class AiService : IAiService
                 knowledgeChunks = sources,
             })),
         });
+
+        _db.AiUsageRecords.Add(new AiUsageRecord { UserId = userId, Tokens = reply.TotalTokens });
 
         await _db.SaveChangesAsync();
 

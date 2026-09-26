@@ -15,8 +15,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Card } from '@/components/Card';
 import { ChatHistorySheet } from '@/components/ChatHistorySheet';
 import * as aiApi from '@/api/aiApi';
-import type { ChatHistoryMessage } from '@/api/aiApi';
+import type { AiUsageStatus, ChatHistoryMessage } from '@/api/aiApi';
 import { describeApiError } from '@/api/client';
+import { isAxiosError } from 'axios';
 import { showAlert } from '@/utils/alert';
 import { describeDay, toLocalIsoDate } from '@/utils/date';
 import { colors, typography, spacing, radii } from '@/theme';
@@ -45,24 +46,39 @@ const welcome = (): ChatMessage => ({
   createdAt: new Date(),
 });
 
+// The server may send UTC without a zone marker; make that explicit.
+const parseUtc = (utc: string) => new Date(utc.endsWith('Z') ? utc : `${utc}Z`);
+
 const fromHistory = (h: ChatHistoryMessage): ChatMessage => ({
   id: h.id,
   role: h.role.toLowerCase() === 'user' ? 'user' : 'assistant',
   text: h.content,
-  // The server sends UTC without a zone marker; make that explicit.
-  createdAt: new Date(h.createdAtUtc.endsWith('Z') ? h.createdAtUtc : `${h.createdAtUtc}Z`),
+  createdAt: parseUtc(h.createdAtUtc),
 });
 
 const timeOf = (d: Date) => d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+// "2h 5m", "12m", or "less than a minute".
+function describeWait(ms: number): string {
+  const minutes = Math.ceil(ms / 60_000);
+  if (minutes <= 1) return 'less than a minute';
+  const hours = Math.floor(minutes / 60);
+  return hours ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+}
+
+// Warn once most of the allowance is used.
+const NEAR_LIMIT = 0.8;
 
 export function AssistantScreen() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([welcome()]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
-  const [loadingChat, setLoadingChat] = useState(true);
+  const [loadingChat, setLoadingChat] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [usage, setUsage] = useState<AiUsageStatus | null>(null);
+  const [now, setNow] = useState(Date.now());
 
   const scrollRef = useRef<ScrollView>(null);
   // Each message's vertical position, so a search result can scroll to it.
@@ -84,14 +100,25 @@ export function AssistantScreen() {
     }
   }
 
-  // Open the most recent conversation once. Tab screens stay mounted, so
-  // this doesn't re-run on tab switches.
+  // Each session (app launch or login) starts on a fresh chat, and earlier
+  // ones are a tap away in History. Tab screens stay mounted, so the
+  // allowance is loaded once here and then updated by each reply.
   useEffect(() => {
-    aiApi
-      .listConversations()
-      .then((list) => (list.length ? openConversation(list[0].id) : setLoadingChat(false)))
-      .catch(() => setLoadingChat(false)); // chat still works without history
+    aiApi.getUsage().then(setUsage).catch(() => {}); // the server still enforces the limit
   }, []);
+
+  // While locked, tick the countdown and check again once it's over.
+  const resetsAt = usage?.locked && usage.resetsAtUtc ? parseUtc(usage.resetsAtUtc) : null;
+  const resetsAtMs = resetsAt?.getTime();
+  useEffect(() => {
+    if (!resetsAtMs) return;
+    const tick = setInterval(() => {
+      setNow(Date.now());
+      if (Date.now() >= resetsAtMs) aiApi.getUsage().then(setUsage).catch(() => {});
+    }, 15_000);
+    setNow(Date.now());
+    return () => clearInterval(tick);
+  }, [resetsAtMs]);
 
   // Jump to a message opened from search, then fade its highlight.
   useEffect(() => {
@@ -115,53 +142,59 @@ export function AssistantScreen() {
     return () => sub.remove();
   }, [highlightId]);
 
-  async function startNewChat() {
-    try {
-      const id = await aiApi.startNewConversation();
-      positions.current.clear();
-      setConversationId(id);
-      setMessages([welcome()]);
-      setHighlightId(null);
-      showAlert('New chat started', 'Earlier chats are in History.', 'success');
-    } catch (error) {
-      showAlert("Couldn't start a new chat", describeApiError(error));
-    }
+  // A new chat is only created on the server with its first message, so
+  // opening the app or tapping New doesn't leave empty chats behind.
+  function resetToNewChat() {
+    positions.current.clear();
+    setConversationId(null);
+    setMessages([welcome()]);
+    setHighlightId(null);
+  }
+
+  function startNewChat() {
+    resetToNewChat();
+    showAlert('New chat started', 'Earlier chats are in History.', 'success');
   }
 
   function onChatDeleted(id: string) {
-    if (id === conversationId) {
-      // The open chat is gone, so switch to a fresh one. Without an id the
-      // server would continue the latest remaining chat instead.
-      setConversationId(null);
-      setMessages([welcome()]);
-      void aiApi.startNewConversation().then(setConversationId).catch(() => {});
-    }
+    if (id === conversationId) resetToNewChat();
   }
 
-  function sendMessage(text: string) {
+  async function sendMessage(text: string) {
     const question = text.trim();
-    if (!question || thinking) return;
+    if (!question || thinking || usage?.locked) return;
 
     setHighlightId(null);
-    setMessages((prev) => [
-      ...prev,
-      { id: `local-${Date.now()}`, role: 'user', text: question, createdAt: new Date() },
-    ]);
+    const questionId = `local-${Date.now()}`;
+    setMessages((prev) => [...prev, { id: questionId, role: 'user', text: question, createdAt: new Date() }]);
     setInput('');
     setThinking(true);
 
     // The backend builds the grounded context (the user's real numbers,
     // local date and time, and the chat so far) — this screen only shows it.
-    aiApi
-      .askAssistant(question, conversationId)
-      .then((response) => {
-        setConversationId(response.conversationId);
-        setMessages((prev) => [
-          ...prev,
-          { id: `local-${Date.now()}-a`, role: 'assistant', text: response.answer, createdAt: new Date() },
-        ]);
-      })
-      .catch((error) => {
+    try {
+      // Without an id the server continues the latest chat, so a fresh
+      // chat is created first.
+      const id = conversationId ?? (await aiApi.startNewConversation());
+      setConversationId(id);
+      const response = await aiApi.askAssistant(question, id);
+      setConversationId(response.conversationId);
+      if (response.usage) setUsage(response.usage);
+      setMessages((prev) => [
+        ...prev,
+        { id: `local-${Date.now()}-a`, role: 'assistant', text: response.answer, createdAt: new Date() },
+      ]);
+    } catch (error) {
+      // Over the limit: the server says when it resets.
+      const limited = isAxiosError(error) && error.response?.status === 429
+        ? (error.response.data as { usage?: AiUsageStatus } | undefined)?.usage
+        : undefined;
+      if (limited) {
+        // It wasn't answered, so give the question back to send later.
+        setMessages((prev) => prev.filter((m) => m.id !== questionId));
+        setInput(question);
+        setUsage(limited);
+      } else {
         setMessages((prev) => [
           ...prev,
           {
@@ -172,11 +205,15 @@ export function AssistantScreen() {
             failed: true,
           },
         ]);
-      })
-      .finally(() => setThinking(false));
+      }
+    } finally {
+      setThinking(false);
+    }
   }
 
   const hasQuestions = messages.some((m) => m.role === 'user');
+  const locked = !!usage?.locked;
+  const nearLimit = !!usage && !locked && usage.tokensUsed >= usage.tokenLimit * NEAR_LIMIT;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -286,6 +323,26 @@ export function AssistantScreen() {
         )}
 
         <View style={styles.inputWrap}>
+          {locked ? (
+            <Card style={styles.lockedCard}>
+              <MaterialCommunityIcons name="timer-sand" size={22} color={colors.amberCaution} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.lockedTitle}>Assistant limit reached</Text>
+                <Text style={styles.lockedText}>
+                  {resetsAt
+                    ? `You can chat again at ${timeOf(resetsAt)} (in ${describeWait(resetsAt.getTime() - now)}).`
+                    : 'You can chat again soon.'}{' '}
+                  Your earlier chats are still in History.
+                </Text>
+              </View>
+            </Card>
+          ) : (
+          <>
+          {nearLimit && usage && (
+            <Text style={styles.nearLimit}>
+              {`You've used ${Math.min(99, Math.round((usage.tokensUsed / usage.tokenLimit) * 100))}% of your assistant allowance for the last ${usage.windowHours} hours.`}
+            </Text>
+          )}
           <Card style={styles.inputBar}>
             <TextInput
               style={styles.input}
@@ -306,6 +363,8 @@ export function AssistantScreen() {
               <MaterialCommunityIcons name="arrow-up" size={18} color={colors.onPrimary} />
             </Pressable>
           </Card>
+          </>
+          )}
         </View>
       </KeyboardAvoidingView>
 
@@ -396,6 +455,27 @@ const styles = StyleSheet.create({
     maxWidth: MAX_WIDTH,
     alignSelf: 'center',
     paddingVertical: spacing.xs,
+  },
+  lockedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    width: '100%',
+    maxWidth: MAX_WIDTH,
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: colors.amberCaution,
+  },
+  lockedTitle: { ...typography.labelLg, color: colors.onSurface },
+  lockedText: { ...typography.bodySm, color: colors.onSurfaceVariant, marginTop: 2 },
+  nearLimit: {
+    ...typography.labelSm,
+    color: colors.amberCaution,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+    width: '100%',
+    maxWidth: MAX_WIDTH,
+    alignSelf: 'center',
   },
   input: { flex: 1, ...typography.bodyMd, color: colors.onSurface, maxHeight: 120, paddingVertical: 8 },
   sendButton: {

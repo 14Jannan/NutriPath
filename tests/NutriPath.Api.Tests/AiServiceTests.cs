@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using NutriPath.Api.Data;
 using NutriPath.Api.Models;
 using NutriPath.Api.Services;
@@ -28,10 +29,10 @@ public class AiServiceTests
         public List<IReadOnlyList<GroqMessage>> Histories { get; } = new();
         private int _replies;
 
-        public Task<string> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage>? history = null)
+        public Task<GroqReply> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage>? history = null)
         {
             Histories.Add(history ?? Array.Empty<GroqMessage>());
-            return Task.FromResult($"answer {++_replies}");
+            return Task.FromResult(new GroqReply($"answer {++_replies}", 1000));
         }
     }
 
@@ -140,6 +141,47 @@ public class AiServiceTests
         await service.DeleteConversationAsync(owner.Id, chat.ConversationId);
 
         Assert.Empty(await service.ListConversationsAsync(owner.Id));
+    }
+
+    private static AiUsageService Usage(NutriPathDbContext db, int limit = 3000, int hours = 5) =>
+        new(db, Options.Create(new AiUsageSettings { TokenLimit = limit, WindowHours = hours }));
+
+    [Fact]
+    public async Task Usage_CountsEachReplysTokens_EvenAfterTheChatIsDeleted()
+    {
+        var (service, _, _, db) = Create();
+        var user = TestDb.AddUser(db);
+        var chat = await service.ChatAsync(user.Id, "Hello", Clock); // the fake costs 1000 tokens
+        await service.DeleteConversationAsync(user.Id, chat.ConversationId);
+
+        var status = await Usage(db).GetStatusAsync(user.Id);
+
+        Assert.Equal(1000, status.TokensUsed);
+        Assert.False(status.Locked);
+        Assert.Null(status.ResetsAtUtc);
+    }
+
+    [Fact]
+    public async Task Usage_LocksAtTheLimit_UntilEnoughOldTokensLeaveTheWindow()
+    {
+        var db = TestDb.Create();
+        var user = TestDb.AddUser(db);
+        var other = TestDb.AddUser(db);
+        var now = DateTime.UtcNow;
+        db.AiUsageRecords.AddRange(
+            new AiUsageRecord { UserId = user.Id, Tokens = 5000, CreatedAtUtc = now.AddHours(-6) }, // outside the window
+            new AiUsageRecord { UserId = user.Id, Tokens = 1500, CreatedAtUtc = now.AddHours(-4) },
+            new AiUsageRecord { UserId = user.Id, Tokens = 1000, CreatedAtUtc = now.AddHours(-2) },
+            new AiUsageRecord { UserId = user.Id, Tokens = 1000, CreatedAtUtc = now.AddHours(-1) },
+            new AiUsageRecord { UserId = other.Id, Tokens = 9000, CreatedAtUtc = now });
+        db.SaveChanges();
+
+        var status = await Usage(db).GetStatusAsync(user.Id);
+
+        Assert.Equal(3500, status.TokensUsed);
+        Assert.True(status.Locked);
+        // Dropping the oldest record (1500) leaves 2000, back under 3000.
+        Assert.Equal(now.AddHours(1), status.ResetsAtUtc);
     }
 
     [Fact]
