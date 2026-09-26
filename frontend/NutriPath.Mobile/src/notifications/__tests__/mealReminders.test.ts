@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import * as Notifications from 'expo-notifications';
+import * as Notifications from '@/notifications/localNotifications';
 import { cancelMealReminders, syncMealReminders } from '@/notifications/mealReminders';
 
-jest.mock('expo-notifications', () => ({
+jest.mock('@/notifications/localNotifications', () => ({
   setNotificationHandler: jest.fn(),
   setNotificationChannelAsync: jest.fn(async () => null),
   getPermissionsAsync: jest.fn(async () => ({ granted: true, canAskAgain: true })),

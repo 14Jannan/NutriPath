@@ -1,22 +1,7 @@
 import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
-import { getDailyMeals } from '@/api/mealsApi';
-import { syncMealReminders } from './mealReminders';
-
-/** Which meals have food logged today. */
-export async function loggedMealTypesToday(): Promise<string[]> {
-  const daily = await getDailyMeals();
-  return daily.meals.filter((m) => m.items.length > 0).map((m) => m.mealType);
-}
-
-async function resync() {
-  try {
-    await syncMealReminders(await loggedMealTypesToday());
-  } catch {
-    // Offline: keep whatever was scheduled last time.
-  }
-}
+import * as Notifications from './localNotifications';
+import { resyncMealReminders } from './mealReminders';
 
 /**
  * Keeps meal reminders current while the user is logged in: re-planned on
@@ -27,10 +12,10 @@ async function resync() {
 export function useMealReminders(onOpen: () => void) {
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    void resync();
+    void resyncMealReminders();
 
     const appState = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void resync();
+      if (state === 'active') void resyncMealReminders();
     });
     const taps = Notifications.addNotificationResponseReceivedListener((response) => {
       if (response.notification.request.identifier.startsWith('meal-reminder:')) onOpen();

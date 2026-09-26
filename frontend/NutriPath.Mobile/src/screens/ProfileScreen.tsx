@@ -8,6 +8,7 @@ import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { AvatarPickerSheet } from '@/components/AvatarPickerSheet';
+import { MealRemindersCard } from '@/components/MealRemindersCard';
 import { describeApiError } from '@/api/client';
 import { showAlert } from '@/utils/alert';
 import { useAuth } from '@/context/AuthContext';
@@ -127,6 +128,8 @@ export function ProfileScreen() {
             )}
           </>
         )}
+
+        <MealRemindersCard />
 
         {sources.length > 0 && (
           <Card style={{ marginTop: spacing.sm }}>

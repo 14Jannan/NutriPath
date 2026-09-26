@@ -1,5 +1,6 @@
-import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import * as Notifications from './localNotifications';
+import { Linking, Platform } from 'react-native';
+import { getDailyMeals } from '@/api/mealsApi';
 import { addDaysIso, toLocalIsoDate } from '@/utils/date';
 import { MEAL_WINDOWS, MealType, windowEnd } from '@/utils/mealWindows';
 
@@ -36,8 +37,12 @@ const MESSAGES: Record<MealType, { title: string; body: string }> = {
 const supported = Platform.OS !== 'web';
 let configured = false;
 
-async function ensureReady(): Promise<boolean> {
-  if (!supported) return false;
+// Reminder failures are silent for users, but visible in Metro while developing.
+function warn(what: string, error: unknown) {
+  if (__DEV__) console.warn(`Meal reminders: ${what}`, error);
+}
+
+async function configure() {
   if (!configured) {
     // Also show reminders while the app is open.
     Notifications.setNotificationHandler({
@@ -57,7 +62,11 @@ async function ensureReady(): Promise<boolean> {
     }
     configured = true;
   }
+}
 
+async function ensureReady(): Promise<boolean> {
+  if (!supported) return false;
+  await configure();
   const permission = await Notifications.getPermissionsAsync();
   if (permission.granted) return true;
   if (!permission.canAskAgain) return false;
@@ -98,7 +107,72 @@ export async function syncMealReminders(loggedToday: string[], now: Date = new D
         });
       }
     }
-  } catch {
+  } catch (error) {
     // Reminders are a nicety; never let them break the screen that asked.
+    warn("couldn't schedule", error);
+  }
+}
+
+/** Which meals have food logged today. */
+export async function loggedMealTypesToday(): Promise<string[]> {
+  const daily = await getDailyMeals();
+  return daily.meals.filter((m) => m.items.length > 0).map((m) => m.mealType);
+}
+
+/** Re-plans reminders from the server's view of today's log. */
+export async function resyncMealReminders(): Promise<void> {
+  try {
+    await syncMealReminders(await loggedMealTypesToday());
+  } catch (error) {
+    warn("couldn't load today's meals", error); // offline: keep the last plan
+  }
+}
+
+export type ReminderStatus = 'on' | 'off' | 'blocked' | 'unsupported';
+
+/**
+ * 'off' means the app can still ask for permission; 'blocked' means the
+ * user said no for good, so only the phone's settings can turn it on.
+ */
+export async function getReminderStatus(): Promise<ReminderStatus> {
+  if (!supported) return 'unsupported';
+  try {
+    const permission = await Notifications.getPermissionsAsync();
+    if (permission.granted) return 'on';
+    return permission.canAskAgain ? 'off' : 'blocked';
+  } catch (error) {
+    warn("couldn't read permission", error);
+    return 'unsupported';
+  }
+}
+
+/** Asks for permission (or opens settings if blocked), then schedules. */
+export async function enableMealReminders(): Promise<ReminderStatus> {
+  const status = await getReminderStatus();
+  if (status === 'blocked') {
+    await Linking.openSettings();
+    return status;
+  }
+  if (status === 'unsupported') return status;
+  await resyncMealReminders(); // asks for permission if needed
+  return getReminderStatus();
+}
+
+/** A sample reminder a few seconds from now, to check they come through. */
+export async function sendTestReminder(): Promise<boolean> {
+  try {
+    if (!(await ensureReady())) return false;
+    await Notifications.scheduleNotificationAsync({
+      content: { ...MESSAGES.Lunch, data: { screen: 'Log', test: true } },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: new Date(Date.now() + 5_000),
+        channelId: CHANNEL_ID,
+      },
+    });
+    return true;
+  } catch (error) {
+    warn("couldn't send the test", error);
+    return false;
   }
 }
