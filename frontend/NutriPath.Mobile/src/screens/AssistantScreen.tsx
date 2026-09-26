@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Card } from '@/components/Card';
+import { ChatMarkdown } from '@/components/ChatMarkdown';
 import { ChatHistorySheet } from '@/components/ChatHistorySheet';
 import * as aiApi from '@/api/aiApi';
 import type { AiUsageStatus, ChatHistoryMessage } from '@/api/aiApi';
@@ -35,6 +36,8 @@ const QUICK_PROMPTS = [
   { icon: 'chart-line' as const, label: 'Explain my score' },
   { icon: 'bread-slice-outline' as const, label: 'Suggest a high-fibre snack' },
   { icon: 'calendar-today' as const, label: 'How am I doing today?' },
+  { icon: 'calendar-week' as const, label: 'Give me my weekly summary' },
+  { icon: 'fire' as const, label: "What's my logging streak?" },
 ];
 
 // A neutral greeting rather than hard-coded numbers — real figures only
@@ -284,7 +287,11 @@ export function AssistantScreen() {
                           message.id === highlightId && styles.bubbleHighlight,
                         ]}
                       >
-                        <Text style={isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant}>{message.text}</Text>
+                        {isUser ? (
+                          <Text style={styles.bubbleTextUser}>{message.text}</Text>
+                        ) : (
+                          <ChatMarkdown text={message.text} style={styles.bubbleTextAssistant} />
+                        )}
                       </View>
                       <Text style={styles.time}>{timeOf(message.createdAt)}</Text>
                     </View>

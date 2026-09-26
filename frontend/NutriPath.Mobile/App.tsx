@@ -8,7 +8,7 @@ import {
   PlusJakartaSans_600SemiBold,
   PlusJakartaSans_700Bold,
 } from '@expo-google-fonts/plus-jakarta-sans';
-import { Inter_400Regular } from '@expo-google-fonts/inter';
+import { Inter_400Regular, Inter_600SemiBold } from '@expo-google-fonts/inter';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { colors } from '@/theme';
 import { AuthProvider } from '@/context/AuthContext';
@@ -22,6 +22,7 @@ export default function App() {
     PlusJakartaSans_600SemiBold,
     PlusJakartaSans_700Bold,
     Inter_400Regular,
+    Inter_600SemiBold,
   });
 
   const onLayoutRootView = useCallback(async () => {
