@@ -4,6 +4,7 @@ import * as SecureStore from '@/api/tokenStorage';
 import { ACCESS_TOKEN_KEY } from '@/api/client';
 import * as authApi from '@/api/authApi';
 import { getMyProfile } from '@/api/profileApi';
+import { cancelMealReminders } from '@/notifications/mealReminders';
 
 // Whether the logged-in user has finished the required profile setup.
 // 'checking' while we ask the server; 'error' if we couldn't find out
@@ -76,6 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logoutUser() {
     await authApi.logout();
+    // Reminders are about this user's meals, so they go with the login.
+    await cancelMealReminders().catch(() => {});
     setIsLoggedIn(false);
     setProfileStatus('checking');
     setFullName('');
