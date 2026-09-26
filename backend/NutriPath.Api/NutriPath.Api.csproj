@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <None Include="Data\Seed\knowledge-base.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Data\Seed\sri-lankan-foods.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,57 @@
+{
+  "_note": "Sri Lankan dishes with verified numbers only. Values are for servingSizeGrams as given by the source (not converted). Fibre, sugar and sodium were not available and are stored as 0 (unknown). Add a dish here only once real values are found; never estimate.",
+  "sources": [
+    {
+      "name": "Sri Lanka Food Composition Database",
+      "authority": "foodcompositiondb.lk: CoTaSS 3 project (MRC UK), IRD 2023. High confidence.",
+      "license": "Values cited from the published database for this project",
+      "foods": [
+        {
+          "externalId": "lk-chicken-kottu-roti",
+          "name": "Chicken Kottu Roti",
+          "servingSizeGrams": 100,
+          "calories": 176,
+          "proteinGrams": 6.5,
+          "carbsGrams": 14.5,
+          "fatGrams": 8.2,
+          "allergens": "wheat, gluten, eggs"
+        }
+      ]
+    },
+    {
+      "name": "Sri Lankan dish estimates",
+      "authority": "Published per-dish figures from secondary sources. Medium confidence, or low for composite plates.",
+      "license": "Values cited for this project",
+      "foods": [
+        {
+          "externalId": "lk-string-hoppers-plain",
+          "name": "String Hoppers (plain)",
+          "servingSizeGrams": 100,
+          "calories": 133,
+          "proteinGrams": 3.3,
+          "carbsGrams": 26.7,
+          "fatGrams": 1.3
+        },
+        {
+          "externalId": "lk-egg-hopper",
+          "name": "Egg Hopper (1 hopper, about 150g)",
+          "servingSizeGrams": 150,
+          "calories": 310,
+          "proteinGrams": 9,
+          "carbsGrams": 37,
+          "fatGrams": 7,
+          "allergens": "eggs"
+        },
+        {
+          "externalId": "lk-rice-and-curry-plate",
+          "name": "Rice and Curry (mixed plate, about 400g)",
+          "servingSizeGrams": 400,
+          "calories": 578,
+          "proteinGrams": 16,
+          "carbsGrams": 65,
+          "fatGrams": 27
+        }
+      ]
+    }
+  ]
+}

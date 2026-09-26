@@ -193,6 +193,13 @@ using (var scope = app.Services.CreateScope())
         }
     }
 
+    // Curated Sri Lankan dishes USDA doesn't have. Cheap to re-run: it only
+    // writes foods that are new or whose values changed in the file.
+    var sriLankanFoods = SriLankanFoodSeeder.SeedAsync(
+        db, Path.Combine(AppContext.BaseDirectory, "Data", "Seed", "sri-lankan-foods.json")).GetAwaiter().GetResult();
+    if (sriLankanFoods > 0)
+        app.Logger.LogInformation("Added or updated {Count} Sri Lankan dishes.", sriLankanFoods);
+
     // Encrypt any chat messages saved before encryption was added.
     var protector = scope.ServiceProvider.GetRequiredService<IMessageProtector>();
     var encrypted = MessageEncryptionMigrator.EncryptExistingAsync(db, protector).GetAwaiter().GetResult();
