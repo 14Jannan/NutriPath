@@ -37,8 +37,9 @@ export function MealRemindersCard() {
   }
 
   async function test() {
-    if (await sendTestReminder()) showAlert('Test reminder on its way', 'It should pop up in about 5 seconds.', 'success');
-    else showAlert("Couldn't send a test", 'Check that notifications are allowed for this app.');
+    const problem = await sendTestReminder();
+    if (problem) showAlert("Couldn't send a test", problem);
+    else showAlert('Test reminder on its way', 'It should pop up in about 5 seconds.', 'success');
   }
 
   return (

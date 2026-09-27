@@ -6,7 +6,6 @@
 // ever imports the pieces below — never 'expo-notifications' itself.
 
 export { scheduleNotificationAsync } from 'expo-notifications/build/scheduleNotificationAsync';
-export { getAllScheduledNotificationsAsync } from 'expo-notifications/build/getAllScheduledNotificationsAsync';
 export { cancelScheduledNotificationAsync } from 'expo-notifications/build/cancelScheduledNotificationAsync';
 export { setNotificationChannelAsync } from 'expo-notifications/build/setNotificationChannelAsync';
 export { setNotificationHandler } from 'expo-notifications/build/NotificationsHandler';

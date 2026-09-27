@@ -73,44 +73,77 @@ async function ensureReady(): Promise<boolean> {
   return (await Notifications.requestPermissionsAsync()).granted;
 }
 
-export async function cancelMealReminders(): Promise<void> {
-  if (!supported) return;
-  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-  await Promise.all(
-    scheduled
-      .filter((n) => n.identifier.startsWith(ID_PREFIX))
-      .map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier))
-  );
+const reminderId = (date: string, mealType: string) => `${ID_PREFIX}${date}:${mealType}`;
+
+// Every reminder id this app could have scheduled around `now`: yesterday
+// (in case the day just changed) through the planning horizon. Cancelling
+// by id avoids listing all scheduled notifications, which in Expo Go also
+// returns other projects' ones and can fail on those.
+function knownReminderIds(now: Date): string[] {
+  const today = toLocalIsoDate(now);
+  const ids: string[] = [];
+  for (let offset = -1; offset <= DAYS_AHEAD; offset++) {
+    const date = addDaysIso(today, offset);
+    for (const window of MEAL_WINDOWS) ids.push(reminderId(date, window.mealType));
+  }
+  return ids;
+}
+
+// Syncs are triggered from several places at once (app start, the Log
+// screen, returning to the app), so they run one after another.
+let queue: Promise<void> = Promise.resolve();
+function serialized(task: () => Promise<void>): Promise<void> {
+  const run = queue.then(task, task);
+  queue = run.catch(() => {});
+  return run;
+}
+
+export function cancelMealReminders(now: Date = new Date()): Promise<void> {
+  if (!supported) return Promise.resolve();
+  return serialized(async () => {
+    for (const id of knownReminderIds(now)) {
+      await Notifications.cancelScheduledNotificationAsync(id).catch(() => {}); // not scheduled: fine
+    }
+  });
 }
 
 /**
- * Re-plans the reminders from scratch: one per meal window still to close
- * over the next week, skipping meals already logged today.
+ * Brings the reminders up to date: one per meal window still to close over
+ * the next week, except meals already logged today. Scheduling an id that
+ * already exists replaces it, so nothing needs clearing first.
  */
-export async function syncMealReminders(loggedToday: string[], now: Date = new Date()): Promise<void> {
-  try {
-    if (!(await ensureReady())) return;
-    await cancelMealReminders();
+export function syncMealReminders(loggedToday: string[], now: Date = new Date()): Promise<void> {
+  return serialized(async () => {
+    try {
+      if (!(await ensureReady())) return;
+    } catch (error) {
+      warn("couldn't get notification permission", error);
+      return;
+    }
 
     const today = toLocalIsoDate(now);
     for (let offset = 0; offset < DAYS_AHEAD; offset++) {
       const date = addDaysIso(today, offset);
       for (const window of MEAL_WINDOWS) {
-        if (offset === 0 && loggedToday.includes(window.mealType)) continue;
+        const id = reminderId(date, window.mealType);
         const fireAt = windowEnd(window, date);
-        if (fireAt <= now) continue;
-
-        await Notifications.scheduleNotificationAsync({
-          identifier: `${ID_PREFIX}${date}:${window.mealType}`,
-          content: { ...MESSAGES[window.mealType], data: { screen: 'Log', mealType: window.mealType } },
-          trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: fireAt, channelId: CHANNEL_ID },
-        });
+        try {
+          if (offset === 0 && (loggedToday.includes(window.mealType) || fireAt <= now)) {
+            await Notifications.cancelScheduledNotificationAsync(id); // logged, or already past
+            continue;
+          }
+          await Notifications.scheduleNotificationAsync({
+            identifier: id,
+            content: { ...MESSAGES[window.mealType], data: { screen: 'Log', mealType: window.mealType } },
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: fireAt, channelId: CHANNEL_ID },
+          });
+        } catch (error) {
+          // One bad reminder shouldn't stop the rest.
+          warn(`couldn't schedule ${window.mealType} on ${date}`, error);
+        }
       }
     }
-  } catch (error) {
-    // Reminders are a nicety; never let them break the screen that asked.
-    warn("couldn't schedule", error);
-  }
+  });
 }
 
 /** Which meals have food logged today. */
@@ -158,10 +191,13 @@ export async function enableMealReminders(): Promise<ReminderStatus> {
   return getReminderStatus();
 }
 
-/** A sample reminder a few seconds from now, to check they come through. */
-export async function sendTestReminder(): Promise<boolean> {
+/**
+ * A sample reminder a few seconds from now, to check they come through.
+ * Returns null on success, or why it failed.
+ */
+export async function sendTestReminder(): Promise<string | null> {
   try {
-    if (!(await ensureReady())) return false;
+    if (!(await ensureReady())) return 'Notifications are not allowed for this app.';
     await Notifications.scheduleNotificationAsync({
       content: { ...MESSAGES.Lunch, data: { screen: 'Log', test: true } },
       trigger: {
@@ -170,9 +206,9 @@ export async function sendTestReminder(): Promise<boolean> {
         channelId: CHANNEL_ID,
       },
     });
-    return true;
+    return null;
   } catch (error) {
     warn("couldn't send the test", error);
-    return false;
+    return error instanceof Error ? error.message : String(error);
   }
 }
