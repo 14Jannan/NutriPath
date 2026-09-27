@@ -84,4 +84,26 @@ describe('meal reminders', () => {
 
     expect(notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
   });
+
+  it("still schedules on Android when the channel can't be created (Expo Go)", async () => {
+    let reminders!: typeof import('@/notifications/mealReminders');
+    let android!: jest.MockedObject<typeof Notifications>;
+    jest.isolateModules(() => {
+      // Fresh copies that see Android, so the one-time setup runs again.
+      jest.doMock('react-native', () => ({ Platform: { OS: 'android' }, Linking: { openSettings: jest.fn() } }));
+      jest.doMock('@/api/mealsApi', () => ({ getDailyMeals: jest.fn() }));
+      android = jest.mocked(require('@/notifications/localNotifications'));
+      reminders = require('@/notifications/mealReminders');
+    });
+    android.getPermissionsAsync.mockResolvedValue({ granted: true, canAskAgain: true } as never);
+    android.setNotificationChannelAsync.mockRejectedValueOnce(new Error('NullPointerException'));
+
+    await reminders.syncMealReminders([], now);
+
+    expect(android.setNotificationChannelAsync).toHaveBeenCalled();
+    expect(android.scheduleNotificationAsync).toHaveBeenCalled();
+    // Falls back to the default channel rather than naming a missing one.
+    const [request] = android.scheduleNotificationAsync.mock.calls[0];
+    expect((request.trigger as { channelId?: string }).channelId).toBeUndefined();
+  });
 });

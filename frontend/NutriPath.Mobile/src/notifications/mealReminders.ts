@@ -36,6 +36,9 @@ const MESSAGES: Record<MealType, { title: string; body: string }> = {
 // Notifications aren't available on web.
 const supported = Platform.OS !== 'web';
 let configured = false;
+// Set once our own Android channel exists; until then reminders use the
+// library's default channel.
+let channelId: string | undefined;
 
 // Reminder failures are silent for users, but visible in Metro while developing.
 function warn(what: string, error: unknown) {
@@ -54,11 +57,19 @@ async function configure() {
       }),
     });
     if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-        name: 'Meal reminders',
-        description: "Reminds you when a meal's time has passed without a log.",
-        importance: Notifications.AndroidImportance.HIGH,
-      });
+      try {
+        await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
+          name: 'Meal reminders',
+          description: "Reminds you when a meal's time has passed without a log.",
+          importance: Notifications.AndroidImportance.HIGH,
+        });
+        channelId = CHANNEL_ID;
+      } catch {
+        // Expo Go on Android fails here (a bug in its scoped channel
+        // manager). The channel only names the reminders in the phone's
+        // settings, so fall back to the default channel instead of failing.
+        channelId = undefined;
+      }
     }
     configured = true;
   }
@@ -135,7 +146,7 @@ export function syncMealReminders(loggedToday: string[], now: Date = new Date())
           await Notifications.scheduleNotificationAsync({
             identifier: id,
             content: { ...MESSAGES[window.mealType], data: { screen: 'Log', mealType: window.mealType } },
-            trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: fireAt, channelId: CHANNEL_ID },
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: fireAt, channelId },
           });
         } catch (error) {
           // One bad reminder shouldn't stop the rest.
@@ -203,7 +214,7 @@ export async function sendTestReminder(): Promise<string | null> {
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: new Date(Date.now() + 5_000),
-        channelId: CHANNEL_ID,
+        channelId,
       },
     });
     return null;
