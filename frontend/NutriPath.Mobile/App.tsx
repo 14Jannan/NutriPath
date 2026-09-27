@@ -13,6 +13,7 @@ import { RootNavigator } from '@/navigation/RootNavigator';
 import { colors } from '@/theme';
 import { AuthProvider } from '@/context/AuthContext';
 import { NotificationHost } from '@/components/NotificationHost';
+import { OfflineGate } from '@/components/OfflineGate';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -43,6 +44,8 @@ export default function App() {
         </AuthProvider>
         {/* Last, so notifications draw above every screen. */}
         <NotificationHost />
+        {/* Above everything, even toasts: nothing works without internet. */}
+        <OfflineGate />
       </View>
     </SafeAreaProvider>
   );
