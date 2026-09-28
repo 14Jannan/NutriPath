@@ -13,8 +13,13 @@ namespace NutriPath.Api.Controllers;
 public class AiController : ControllerBase
 {
     private readonly IAiService _aiService;
+    private readonly IAiUsageService _usage;
 
-    public AiController(IAiService aiService) => _aiService = aiService;
+    public AiController(IAiService aiService, IAiUsageService usage)
+    {
+        _aiService = aiService;
+        _usage = usage;
+    }
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
@@ -28,10 +33,12 @@ public class AiController : ControllerBase
     /// <response code="200">The answer, the knowledge sources used, and the conversation id.</response>
     /// <response code="400">Empty question, or an implausible date/time.</response>
     /// <response code="404">The conversation doesn't exist or isn't the user's.</response>
+    /// <response code="429">The user's token allowance is used up; the body says when it resets.</response>
     [HttpPost("chat")]
     [ProducesResponseType<ChatResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Chat([FromBody] ChatRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Question))
@@ -39,16 +46,29 @@ public class AiController : ControllerBase
         if (!ClientDate.TryResolveClock(request.LocalDate, request.LocalDateTime, out var clock))
             return BadRequest(new { message = "Your device's date or time looks wrong. Please check your clock." });
 
+        var usage = await _usage.GetStatusAsync(CurrentUserId);
+        if (usage.Locked)
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                message = "You've reached your assistant limit for now. It resets soon.",
+                usage,
+            });
+
         try
         {
             var response = await _aiService.ChatAsync(CurrentUserId, request.Question, clock, request.ConversationId);
-            return Ok(response);
+            return Ok(response with { Usage = await _usage.GetStatusAsync(CurrentUserId) });
         }
         catch (KeyNotFoundException ex)
         {
             return NotFound(new { message = ex.Message });
         }
     }
+
+    /// <summary>How much of the user's assistant allowance is used, and when it resets if locked.</summary>
+    [HttpGet("usage")]
+    [ProducesResponseType<AiUsageStatus>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetUsage() => Ok(await _usage.GetStatusAsync(CurrentUserId));
 
     /// <summary>Gets the most recent conversation, oldest message first.</summary>
     [HttpGet("history")]

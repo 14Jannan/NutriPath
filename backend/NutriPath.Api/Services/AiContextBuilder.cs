@@ -43,6 +43,32 @@ public class AiContextBuilder : IAiContextBuilder
 
         var weeklyScore = await _weeklyScoreService.GetCurrentWeekScoreAsync(userId, today);
 
+        // The actual log for the last 7 days (today included), so the AI can
+        // talk about what was eaten, not just the totals. Snapshots, like
+        // every other total, so past days never change.
+        var weekStart = today.AddDays(-6);
+        var weekItems = await _db.MealItems
+            .Where(i => i.Meal!.UserId == userId && i.Meal.Date >= weekStart && i.Meal.Date <= today)
+            .Select(i => new
+            {
+                i.Meal!.Date,
+                i.Meal.MealType,
+                Food = i.Food!.Name,
+                i.QuantityGrams,
+                i.CaloriesSnapshot,
+                i.ProteinGramsSnapshot,
+                i.FiberGramsSnapshot,
+            })
+            .ToListAsync();
+
+        // A year back is plenty for "best streak".
+        var loggedDays = await _db.Meals
+            .Where(m => m.UserId == userId && m.Date > today.AddDays(-366) && m.Date <= today && m.Items.Any())
+            .Select(m => m.Date)
+            .Distinct()
+            .ToListAsync();
+        var streak = LoggingStreak.Calculate(loggedDays, today);
+
         // Simple keyword-based retrieval: search the real Foods table for
         // words from the question, so the AI can reference actual catalog
         // items with real nutrition values instead of inventing a dish.
@@ -65,6 +91,48 @@ public class AiContextBuilder : IAiContextBuilder
                 utcOffset = clock.LocalNow?.ToString("zzz") ?? "unknown",
             },
             mealsLoggedToday = mealsLoggedToday.Select(t => t.ToString()).OrderBy(t => t).ToList(),
+            todaysLog = weekItems
+                .Where(i => i.Date == today)
+                .GroupBy(i => i.MealType)
+                .OrderBy(g => g.Key)
+                .Select(g => new
+                {
+                    meal = g.Key.ToString(),
+                    foods = g.Select(i => new
+                    {
+                        name = i.Food,
+                        grams = Math.Round(i.QuantityGrams),
+                        calories = Math.Round(i.CaloriesSnapshot),
+                        proteinGrams = Math.Round(i.ProteinGramsSnapshot, 1),
+                    }),
+                }),
+            // Oldest first, one entry per day, including days with nothing logged.
+            last7Days = Enumerable.Range(0, 7).Select(offset =>
+            {
+                var date = weekStart.AddDays(offset);
+                var items = weekItems.Where(i => i.Date == date).ToList();
+                return new
+                {
+                    date = date.ToString("ddd d MMM", System.Globalization.CultureInfo.InvariantCulture),
+                    calories = Math.Round(items.Sum(i => i.CaloriesSnapshot)),
+                    proteinGrams = Math.Round(items.Sum(i => i.ProteinGramsSnapshot), 1),
+                    fiberGrams = Math.Round(items.Sum(i => i.FiberGramsSnapshot), 1),
+                    mealsLogged = items.Select(i => i.MealType).Distinct().Order().Select(t => t.ToString()),
+                    // The most-eaten foods that day, to make the summary concrete.
+                    topFoods = items.GroupBy(i => i.Food)
+                        .OrderByDescending(g => g.Sum(i => i.CaloriesSnapshot))
+                        .Take(3)
+                        .Select(g => g.Key),
+                };
+            }),
+            loggingStreak = new
+            {
+                howToRead = "Consecutive days with at least one meal logged. If loggedToday is false, the " +
+                            "streak is still alive but ends tonight unless something is logged today.",
+                currentDays = streak.CurrentDays,
+                bestDays = streak.BestDays,
+                loggedToday = streak.LoggedToday,
+            },
             userGoal = profile?.Goal.ToString() ?? "Not set",
             allergies,
             dietaryPreferences = profile?.DietaryPreferences ?? new List<string>(),

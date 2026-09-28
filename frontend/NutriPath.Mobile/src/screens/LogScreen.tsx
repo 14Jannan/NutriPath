@@ -10,9 +10,18 @@ import { LogStackParamList } from '@/navigation/LogStackNavigator';
 import { addDaysIso, describeDay, todayIso } from '@/utils/date';
 import { confirmAction, showAlert } from '@/utils/alert';
 import { describeApiError } from '@/api/client';
+import { MEAL_WINDOWS, MealStatus, describeWindow, mealStatus } from '@/utils/mealWindows';
+import { syncMealReminders } from '@/notifications/mealReminders';
 import { colors, typography, spacing, radii } from '@/theme';
 
-const MEAL_TYPES = ['Breakfast', 'Lunch', 'Snack', 'Dinner'];
+// Status chip per meal. Logging is allowed any time: ahead of the window
+// when the user knows what they'll eat, or after it when logging late.
+const STATUS: Record<MealStatus, { label: string; color: string; background: string }> = {
+  logged: { label: 'Logged ✓', color: colors.primary, background: colors.secondaryFixed },
+  open: { label: 'Now', color: colors.onPrimary, background: colors.emerald },
+  upcoming: { label: 'Upcoming', color: colors.onSurfaceVariant, background: colors.surfaceContainer },
+  missed: { label: 'Not logged, add it late', color: colors.amberCaution, background: colors.amberSoft },
+};
 
 export function LogScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LogStackParamList>>();
@@ -23,7 +32,12 @@ export function LogScreen() {
 
   const load = useCallback((day: string) => {
     getDailyMeals(day)
-      .then(setDaily)
+      .then((meals) => {
+        setDaily(meals);
+        // Logging or removing food changes which reminders are still due.
+        if (day === todayIso())
+          void syncMealReminders(meals.meals.filter((m) => m.items.length > 0).map((m) => m.mealType));
+      })
       .catch(() => setDaily(null));
   }, []);
 
@@ -87,13 +101,25 @@ export function LogScreen() {
           </Pressable>
         </View>
 
-        {MEAL_TYPES.map((mealType) => {
+        {MEAL_WINDOWS.map((window) => {
+          const { mealType } = window;
           const group = findMealGroup(mealType);
+          const status = STATUS[mealStatus(window, date, !!group?.items.length)];
           return (
             <Card key={mealType} style={{ marginBottom: spacing.sm }}>
               <View style={styles.mealHeader}>
-                <Text style={styles.mealTitle}>{mealType}</Text>
-                <Text style={styles.mealTotal}>{Math.round(group?.totalCalories ?? 0)} kcal</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.mealTitle}>
+                    {window.emoji} {mealType}
+                  </Text>
+                  <Text style={styles.mealWindow}>{describeWindow(window)}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                  <Text style={[styles.statusChip, { color: status.color, backgroundColor: status.background }]}>
+                    {status.label}
+                  </Text>
+                  <Text style={styles.mealTotal}>{Math.round(group?.totalCalories ?? 0)} kcal</Text>
+                </View>
               </View>
 
               {group?.items.map((item) => (
@@ -135,8 +161,16 @@ const styles = StyleSheet.create({
   dayButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   title: { ...typography.headlineLg, color: colors.onSurface },
   dayTotal: { ...typography.labelMd, color: colors.onSurfaceVariant },
-  mealHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs },
+  mealHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.xs },
   mealTitle: { ...typography.labelLg, color: colors.onSurface },
+  mealWindow: { ...typography.labelSm, color: colors.onSurfaceVariant, marginTop: 2 },
+  statusChip: {
+    ...typography.labelSm,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
+    overflow: 'hidden',
+  },
   mealTotal: { ...typography.labelMd, color: colors.onSurfaceVariant },
   itemRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, gap: spacing.xs },
   itemName: { ...typography.bodyMd, color: colors.onSurface, flex: 1 },

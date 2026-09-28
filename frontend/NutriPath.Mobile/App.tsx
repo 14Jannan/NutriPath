@@ -8,11 +8,12 @@ import {
   PlusJakartaSans_600SemiBold,
   PlusJakartaSans_700Bold,
 } from '@expo-google-fonts/plus-jakarta-sans';
-import { Inter_400Regular } from '@expo-google-fonts/inter';
+import { Inter_400Regular, Inter_600SemiBold } from '@expo-google-fonts/inter';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { colors } from '@/theme';
 import { AuthProvider } from '@/context/AuthContext';
 import { NotificationHost } from '@/components/NotificationHost';
+import { OfflineGate } from '@/components/OfflineGate';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -22,6 +23,7 @@ export default function App() {
     PlusJakartaSans_600SemiBold,
     PlusJakartaSans_700Bold,
     Inter_400Regular,
+    Inter_600SemiBold,
   });
 
   const onLayoutRootView = useCallback(async () => {
@@ -42,6 +44,8 @@ export default function App() {
         </AuthProvider>
         {/* Last, so notifications draw above every screen. */}
         <NotificationHost />
+        {/* Above everything, even toasts: nothing works without internet. */}
+        <OfflineGate />
       </View>
     </SafeAreaProvider>
   );

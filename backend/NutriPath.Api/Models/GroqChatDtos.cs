@@ -31,7 +31,19 @@ public class GroqChatResponse
 {
     [JsonPropertyName("choices")]
     public List<GroqChoice> Choices { get; set; } = new();
+
+    [JsonPropertyName("usage")]
+    public GroqUsage? Usage { get; set; }
 }
+
+public class GroqUsage
+{
+    [JsonPropertyName("total_tokens")]
+    public int TotalTokens { get; set; }
+}
+
+/// <summary>The model's answer and how many tokens (prompt + answer) it cost.</summary>
+public record GroqReply(string Text, int TotalTokens);
 
 public class GroqChoice
 {

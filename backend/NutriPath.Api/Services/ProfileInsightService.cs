@@ -71,7 +71,7 @@ public class ProfileInsightService : IProfileInsightService
             var insight = await _groqClient.AskAsync(
                 SystemPrompt,
                 $"USER DATA (use these exact numbers):\n{facts}\n\nExplain what this means for their diet.");
-            return new ProfileInsightResponse(preview, insight.Trim());
+            return new ProfileInsightResponse(preview, insight.Text.Trim());
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {

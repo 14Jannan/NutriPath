@@ -24,6 +24,7 @@ public class NutriPathDbContext : DbContext
     public DbSet<KnowledgeChunk> KnowledgeChunks => Set<KnowledgeChunk>();
     public DbSet<AiConversation> AiConversations => Set<AiConversation>();
     public DbSet<AiMessage> AiMessages => Set<AiMessage>();
+    public DbSet<AiUsageRecord> AiUsageRecords => Set<AiUsageRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -56,6 +57,15 @@ public class NutriPathDbContext : DbContext
             .HasOne<User>()
             .WithMany()
             .HasForeignKey(f => f.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Usage is summed per user over recent hours on every chat.
+        modelBuilder.Entity<AiUsageRecord>()
+            .HasIndex(r => new { r.UserId, r.CreatedAtUtc });
+        modelBuilder.Entity<AiUsageRecord>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(r => r.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
         // One Meal has many MealItems. Naming the MealItem.Meal navigation

@@ -5,14 +5,14 @@ import { colors, typography, radii } from '@/theme';
 interface ButtonProps {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary';
+  // 'danger' is for destructive actions such as logging out.
+  variant?: 'primary' | 'secondary' | 'danger';
   style?: ViewStyle;
   // Greyed out and not pressable, e.g. until a form step is valid.
   disabled?: boolean;
 }
 
 export function Button({ label, onPress, variant = 'primary', style, disabled = false }: ButtonProps) {
-  const isPrimary = variant === 'primary';
   return (
     <Pressable
       onPress={onPress}
@@ -21,13 +21,13 @@ export function Button({ label, onPress, variant = 'primary', style, disabled = 
       accessibilityState={{ disabled }}
       style={({ pressed }) => [
         styles.base,
-        isPrimary ? styles.primary : styles.secondary,
+        styles[variant],
         pressed && !disabled && styles.pressed,
         disabled && styles.disabled,
         style,
       ]}
     >
-      <Text style={[styles.label, isPrimary ? styles.primaryLabel : styles.secondaryLabel]}>
+      <Text style={[styles.label, labelStyles[variant]]}>
         {label}
       </Text>
     </Pressable>
@@ -44,9 +44,14 @@ const styles = StyleSheet.create({
   },
   primary: { backgroundColor: colors.primary },
   secondary: { backgroundColor: colors.surfaceContainerLow },
+  danger: { backgroundColor: colors.error },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.4 },
   label: { ...typography.labelLg },
-  primaryLabel: { color: colors.onPrimary },
-  secondaryLabel: { color: colors.primary },
+});
+
+const labelStyles = StyleSheet.create({
+  primary: { color: colors.onPrimary },
+  secondary: { color: colors.primary },
+  danger: { color: colors.onError },
 });

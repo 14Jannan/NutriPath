@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
   headerInner: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   headerButton: { minWidth: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   progressText: { ...typography.labelMd, color: colors.onSurfaceVariant, marginBottom: 6, textAlign: 'center' },
-  logoutText: { ...typography.labelMd, color: colors.outline },
+  logoutText: { ...typography.labelMd, color: colors.error },
   scroll: { flexGrow: 1, paddingHorizontal: spacing.margin, paddingBottom: spacing.lg },
   content: { width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },

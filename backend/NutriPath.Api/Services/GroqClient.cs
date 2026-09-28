@@ -19,7 +19,7 @@ public class GroqClient : IGroqClient
             new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
     }
 
-    public async Task<string> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage>? history = null)
+    public async Task<GroqReply> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage>? history = null)
     {
         var messages = new List<GroqMessage> { new() { Role = "system", Content = systemPrompt } };
         messages.AddRange(history ?? Array.Empty<GroqMessage>());
@@ -36,7 +36,13 @@ public class GroqClient : IGroqClient
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<GroqChatResponse>();
-        return result?.Choices.FirstOrDefault()?.Message.Content
+        var text = result?.Choices.FirstOrDefault()?.Message.Content
             ?? "I couldn't generate a response right now.";
+
+        // If Groq ever omits usage, estimate ~4 characters per token so the
+        // limit still applies.
+        var tokens = result?.Usage?.TotalTokens
+            ?? (messages.Sum(m => m.Content.Length) + text.Length) / 4;
+        return new GroqReply(text, tokens);
     }
 }

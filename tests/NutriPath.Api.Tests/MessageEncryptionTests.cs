@@ -127,7 +127,7 @@ public class MessageEncryptionTests
 
     private sealed class StubGroq : IGroqClient
     {
-        public Task<string> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage>? history = null) =>
-            Task.FromResult("Try dhal and red rice.");
+        public Task<GroqReply> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage>? history = null) =>
+            Task.FromResult(new GroqReply("Try dhal and red rice.", 1000));
     }
 }

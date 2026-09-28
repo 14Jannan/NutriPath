@@ -40,3 +40,35 @@ public class ClientDateTests
         Assert.False(ClientDate.TryResolve(UtcToday.AddDays(offsetDays), out _));
     }
 }
+
+public class LoggingStreakTests
+{
+    private static readonly DateOnly Today = new(2026, 9, 26);
+    private static DateOnly DaysAgo(int n) => Today.AddDays(-n);
+
+    [Fact]
+    public void CountsBackFromToday_AndFindsTheBestRun()
+    {
+        // A 4-day run ending today, and an older 5-day run.
+        var days = new[] { 0, 1, 2, 3, 10, 11, 12, 13, 14 }.Select(DaysAgo);
+
+        var streak = LoggingStreak.Calculate(days, Today);
+
+        Assert.Equal(new LoggingStreak(4, 5, true), streak);
+    }
+
+    [Fact]
+    public void NothingLoggedYetToday_KeepsYesterdaysStreakAlive()
+    {
+        var streak = LoggingStreak.Calculate(new[] { DaysAgo(1), DaysAgo(2) }, Today);
+
+        Assert.Equal(new LoggingStreak(2, 2, false), streak);
+    }
+
+    [Fact]
+    public void AMissedDay_EndsTheStreak()
+    {
+        Assert.Equal(0, LoggingStreak.Calculate(new[] { DaysAgo(2), DaysAgo(3) }, Today).CurrentDays);
+        Assert.Equal(new LoggingStreak(0, 0, false), LoggingStreak.Calculate(Array.Empty<DateOnly>(), Today));
+    }
+}

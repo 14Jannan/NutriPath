@@ -15,11 +15,11 @@ public class ProfileInsightTests
         public string? LastUserMessage { get; private set; }
         public Exception? Failure { get; init; }
 
-        public Task<string> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<NutriPath.Api.Models.GroqMessage>? history = null)
+        public Task<NutriPath.Api.Models.GroqReply> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<NutriPath.Api.Models.GroqMessage>? history = null)
         {
             LastUserMessage = userMessage;
             if (Failure != null) throw Failure;
-            return Task.FromResult("  • Eat well.  ");
+            return Task.FromResult(new NutriPath.Api.Models.GroqReply("  • Eat well.  ", 100));
         }
     }
 

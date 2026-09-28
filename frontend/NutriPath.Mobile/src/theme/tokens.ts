@@ -19,6 +19,9 @@ export const colors = {
   outline: '#717975',
   emerald: '#10B981',
   amberCaution: '#B45309',
+  amberSoft: '#FEF3C7',
+  error: '#ba1a1a',
+  onError: '#ffffff',
 } as const;
 
 export const typography = {

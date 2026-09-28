@@ -1,14 +1,14 @@
 import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, NavigatorScreenParams } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { WelcomeScreen } from '@/screens/WelcomeScreen';
 import { CreateAccountScreen } from '@/screens/CreateAccountScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
 import { VerifyOtpScreen } from '@/screens/VerifyOtpScreen';
 import { ForgotPasswordScreen } from '@/screens/ForgotPasswordScreen';
-import { MainTabNavigator } from '@/navigation/MainTabNavigator';
+import { MainTabNavigator, MainTabParamList } from '@/navigation/MainTabNavigator';
 import { OnboardingScreen } from '@/screens/OnboardingScreen';
 import { Button } from '@/components/Button';
 import { useAuth } from '@/context/AuthContext';
@@ -21,7 +21,8 @@ export type RootStackParamList = {
   VerifyOtp: { email: string };
   ForgotPassword: undefined;
   Onboarding: undefined;
-  Home: undefined;
+  // Optionally opens a specific tab, e.g. from a meal reminder.
+  Home: NavigatorScreenParams<MainTabParamList> | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -35,7 +36,7 @@ function ProfileCheckFailed() {
       <Text style={styles.title}>Can't reach NutriPath</Text>
       <Text style={styles.body}>Check your connection and that the backend is running, then try again.</Text>
       <Button label="Try again" onPress={refreshProfileStatus} style={{ marginTop: spacing.md, maxWidth: 320 }} />
-      <Button label="Log out" variant="secondary" onPress={logoutUser} style={{ marginTop: spacing.sm, maxWidth: 320 }} />
+      <Button label="Log out" variant="danger" onPress={logoutUser} style={{ marginTop: spacing.sm, maxWidth: 320 }} />
     </View>
   );
 }
@@ -48,7 +49,7 @@ export function RootNavigator() {
     // in, whether the required profile setup has been completed.
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.primary} size="large" />
+        <ActivityIndicator color={colors.primary} size="large" /> 
       </View>
     );
   }
