@@ -11,6 +11,15 @@ using NutriPath.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Render (and most cloud hosts) assign the port at runtime via PORT; Kestrel
+// won't pick it up on its own. Locally PORT is unset, so launchSettings.json
+// keeps working for `dotnet run`.
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(port))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
 builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"));
