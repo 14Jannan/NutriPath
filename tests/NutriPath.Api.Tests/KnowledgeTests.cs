@@ -16,6 +16,32 @@ namespace NutriPath.Api.Tests;
 public class KnowledgeTests
 {
     [Theory]
+    [InlineData("Stick to shrimp options that are allergy-free.")]
+    [InlineData("Those snacks are allergen‑free.")]
+    [InlineData("This product is guaranteed safe.")]
+    [InlineData("There is no need to check the ingredients.")]
+    [InlineData("There is no risk of cross-contact.")]
+    [InlineData("There is zero cross‑contact.")]
+    public void UnverifiedAllergyGuaranteesAreReplaced(string answer)
+    {
+        var reply = JsonSerializer.Serialize(new { answer, sourceIds = Array.Empty<Guid>(), insufficientEvidence = false });
+        var parsed = GroundedNutritionAnswer.Parse(reply, []);
+        Assert.True(parsed.InsufficientEvidence);
+        Assert.Contains("cross-contact", parsed.Answer);
+        Assert.DoesNotContain(answer, parsed.Answer);
+    }
+
+    [Fact]
+    public void AllergyUncertaintyAndCrossContactAdviceArePreserved()
+    {
+        const string answer = "I can’t confirm the ingredients. Ask the kitchen about cross-contact and avoid peanuts.";
+        var reply = JsonSerializer.Serialize(new { answer, sourceIds = Array.Empty<Guid>(), insufficientEvidence = true });
+        var parsed = GroundedNutritionAnswer.Parse(reply, []);
+        Assert.Equal(answer, parsed.Answer);
+        Assert.True(parsed.InsufficientEvidence);
+        Assert.Empty(parsed.References);
+    }
+    [Theory]
     [InlineData(0, 0)]
     [InlineData(24, 0)]
     [InlineData(24, 23)]
@@ -158,10 +184,13 @@ public class KnowledgeTests
         public string Model { get; set; } = "";
         public int Dimension { get; set; } = 384;
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.True(request.Content?.Headers.ContentLength > 0);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = JsonContent.Create(new { model = Model, vectors = new[] { Enumerable.Repeat(1f, Dimension).ToArray() } }),
             });
+        }
     }
 }

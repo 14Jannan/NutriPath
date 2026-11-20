@@ -113,6 +113,7 @@ In the API and CLI environment:
 $env:Knowledge__EmbeddingUrl = 'http://127.0.0.1:8092/embed'
 dotnet run --project backend/NutriPath.Api -- knowledge enable-vector
 dotnet run --project backend/NutriPath.Api -- knowledge reindex
+dotnet run --project backend/NutriPath.Api -- knowledge coverage
 ```
 
 `Knowledge__EmbeddingModel` optionally sets the expected model identifier.
@@ -122,9 +123,26 @@ retrieval. Endpoint failures and unavailable vector storage fall back to
 keyword retrieval. An isolated production worker needs a private network
 boundary. Keep the embedding endpoint out of public ingress.
 
+For a verified local deployment, set `Knowledge__RetrievalMode=semantic` in
+the API process after the provider starts and coverage reports 24 of 24
+approved chunks for the checked-in corpus. A successful semantic query with
+zero qualifying hits returns no evidence. A failed or unavailable semantic
+channel uses keyword retrieval. Keep `hybrid` available for comparison or
+datasets where it performs better. The production configuration is separate
+from this local choice.
+
+The Windows verification used PostgreSQL 16.15 and pgvector 0.8.6 installed in
+an isolated [conda-forge environment](https://anaconda.org/conda-forge/pgvector)
+with [Micromamba](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html).
+The benchmark worker used two CPU threads, a 91 MB MiniLM weights file at
+revision `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`, and approximately 488 MiB
+of process working set after warming. Leave additional memory and disk space
+for Python dependencies, PostgreSQL and the API. Use `HF_HUB_OFFLINE=1` with a
+populated Hugging Face cache to run inference without network access.
+
 | Setting under `Knowledge__` | Default |
 | --- | --- |
-| `RetrievalMode` | `hybrid`, with `keyword` and `semantic` available |
+| `RetrievalMode` | `semantic`, with `keyword` and `hybrid` available |
 | `CandidateCount` | 12 per channel |
 | `TopK` | 3 |
 | `MinimumKeywordSimilarity` | 0 |
@@ -139,6 +157,9 @@ messages for chat inference under the existing integration. Private
 conversations are not imported as knowledge or used for training. Citation and
 quantity checks catch specific output errors. They do not certify factual
 correctness, correct assignment of every number, or allergy safety.
+The server also replaces explicit unverified allergy-safety guarantees with
+an insufficient-evidence message about checking ingredients and cross-contact.
+[FDA food allergy guidance](https://www.fda.gov/food/nutrition-food-labeling-and-critical-foods/food-allergies)
 
 ## Evaluation
 
@@ -149,8 +170,10 @@ dotnet run --project backend/NutriPath.Api -- knowledge evaluate $questions
 
 The English fixture contains 96 evidence-seeking questions and eight personal,
 unrelated, medical or injection cases. It records expected source titles and
-answer criteria. The CLI reports Recall@K, Precision@K, reciprocal rank,
-latency and the rate of returning candidates for no-evidence cases. It freezes
+answer criteria. The CLI reports Recall, Precision and MRR at K=3 and K=5 for
+the full evidence set and the 24 Sri Lankan questions. It also reports p50
+and p95 latency over successful searches, failure counts and the rate of
+returning candidates for no-evidence cases. It freezes
 the old TF-IDF algorithm and its original corpus for the baseline. The legacy
 and upgraded corpora use separate source labels for the same questions. With
 vectors configured, evaluation runs semantic and hybrid modes without silently
@@ -207,15 +230,28 @@ For CI, open a pull request targeting `main` or push the reviewed changes to
 - [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
 - [GitHub Actions run history](https://docs.github.com/en/actions/how-tos/monitor-workflows/view-workflow-run-history)
 
-In a local PostgreSQL 18.3 run, old TF-IDF scored 54.7% recall, 28.5% precision,
-and 0.549 MRR at K=3. Managed keyword retrieval scored 90.6% recall, 30.2%
-precision, and 0.839 MRR. Measured p95 retrieval latency was 0.29 ms for the
-in-process baseline and 9.38 ms for managed retrieval, which includes a
-database approval check. No-evidence cases returned candidates 50.0% and
-62.5% of the time, respectively. This fixture measures retrieval, including
-corpus coverage. It does not measure live answer accuracy. The session had
-neither pgvector nor downloaded model weights, so vector and hybrid scores
-remain open. For a live response review, use synthetic profiles, compare
+The PostgreSQL 16.15 + MiniLM run indexed all 24 approved chunks and recorded
+zero retrieval failures in every mode. The three managed modes used the same
+approved corpus. Legacy TF-IDF used its original corpus for historical context.
+
+| Mode | Recall@3 / @5 | Precision@3 / @5 | MRR@3 / @5 | p50 / p95 | No-evidence cases returning candidates |
+| --- | --- | --- | --- | --- | --- |
+| Legacy TF-IDF | 54.7% / 58.3% | 28.5% / 18.3% | 0.549 / 0.556 | 0.07 / 0.09 ms | 4 / 8 |
+| Managed TF-IDF | 90.6% / 92.7% | 30.2% / 18.5% | 0.839 / 0.843 | 0.77 / 1.23 ms | 5 / 8 |
+| MiniLM semantic | 96.9% / 97.9% | 32.3% / 19.6% | 0.948 / 0.951 | 24.09 / 38.30 ms | 1 / 8 |
+| Hybrid | 95.8% / 99.0% | 31.9% / 19.8% | 0.920 / 0.928 | 23.13 / 36.89 ms | 5 / 8 |
+
+| Mode, Sri Lankan subset | Recall@3 / @5 | Precision@3 / @5 | MRR@3 / @5 |
+| --- | --- | --- | --- |
+| Managed TF-IDF | 91.7% / 91.7% | 30.6% / 18.3% | 0.868 / 0.868 |
+| MiniLM semantic | 91.7% / 95.8% | 30.6% / 19.2% | 0.875 / 0.885 |
+| Hybrid | 87.5% / 100.0% | 29.2% / 20.0% | 0.875 / 0.906 |
+
+Semantic was selected for the running app's three-result cutoff because it
+led on overall Recall@3 and MRR@3 and returned evidence less often on
+no-evidence examples. Hybrid's higher Recall@5 did not change that choice.
+The labeled fixture measures retrieval, including corpus coverage, and is
+small. For a live response review, use synthetic profiles, compare
 outputs to the fixture criteria and assess citations, unsupported claims,
 application of allergy constraints, latency and token use.
 
@@ -223,3 +259,20 @@ For a later Sinhala and Tamil phase, add reviewed sources and per-language
 labels, evaluate multilingual embedding candidates on separate held-out
 queries, and benchmark language-aware tokenization before setting defaults.
 Keep exact personal values in structured retrieval throughout.
+
+## Local browser smoke test
+
+Open [the local Expo app](http://localhost:8081) and sign in as
+`demo@nutripath.test` using the disposable password supplied in the local
+setup session. Use this account only against the loopback development API.
+The seeded profile has a **2,173 kcal** calorie target and **113 g** protein
+target. The **2,191 kcal** and **117 g** results in the live regression belong
+to a separate synthetic profile. If the demo profile is edited, compare with
+its current dashboard values.
+
+Ask for the current calorie goal, then ask for fibre sources and an approved
+citation. Open the returned source, reload to check session restoration, and
+log out and reload again. Retry a temporary provider error after a short
+pause. Upstream rate limits, timeouts, and temporary failures return a generic
+retryable response without returning provider payloads or charging the app
+usage allowance for an unsuccessful answer.

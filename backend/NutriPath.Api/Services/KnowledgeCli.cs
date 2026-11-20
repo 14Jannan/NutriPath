@@ -69,9 +69,13 @@ public sealed class KnowledgeCli(NutriPathDbContext db, IEmbeddingService embedd
             case ["enable-vector"]:
                 await db.Database.ExecuteSqlRawAsync(KnowledgeVectors.SetupSql);
                 break;
+            case ["coverage"]:
+                await ReportCoverageAsync();
+                break;
             case ["reindex"]:
                 if (!embeddings.Enabled) throw new InvalidOperationException("Configure Knowledge:EmbeddingUrl first.");
-                foreach (var d in await db.KnowledgeDocuments.Include(d => d.Chunks).Where(d => d.Approved).ToListAsync())
+                foreach (var d in await db.KnowledgeDocuments.Include(d => d.Chunks)
+                    .Where(d => d.Approved && d.Language == "en").ToListAsync())
                 {
                     await using var transaction = await db.Database.BeginTransactionAsync();
                     await IndexAsync(d);
@@ -86,25 +90,42 @@ public sealed class KnowledgeCli(NutriPathDbContext db, IEmbeddingService embedd
                 var baseline = new KnowledgeRetrievalService(scopes);
                 baseline.LoadForEvaluation(legacyChunks);
                 await retrieval.EnsureIndexBuiltAsync();
-                var topK = Math.Clamp(configuration.GetValue("Knowledge:TopK", 3), 1, 12);
-                await EvaluateAsync("legacy-tfidf", questions, topK, q =>
-                    Task.FromResult(baseline.Search(q, topK)), legacy: true);
-                await EvaluateAsync("keyword", questions, topK, q => retrieval.SearchWithModeAsync(q, "keyword"));
+                var sriLankanTitles = (await db.KnowledgeDocuments.Where(d =>
+                    d.Approved && d.Language == "en" && d.Category == "Sri Lankan nutrition")
+                    .Select(d => d.Title).ToListAsync()).ToHashSet();
+                var legacyFailures = await EvaluateAsync("legacy-tfidf", questions, sriLankanTitles, q =>
+                    Task.FromResult(baseline.Search(q, 5)), legacy: true);
+                var keywordFailures = await EvaluateAsync("keyword", questions, sriLankanTitles,
+                    q => retrieval.SearchWithModeAsync(q, "keyword", evaluationTopK: 5));
+                if (legacyFailures + keywordFailures > 0)
+                    throw new InvalidOperationException("Keyword evaluation had retrieval failures.");
                 if (embeddings.Enabled)
                 {
-                    var approvedCount = await db.KnowledgeChunks.CountAsync(c =>
-                        c.Document != null && c.Document.Approved && c.Document.Language == "en");
-                    var indexed = await KnowledgeVectors.CountIndexedApprovedChunksAsync(db, embeddings.Model);
-                    Console.WriteLine(JsonSerializer.Serialize(new { model = embeddings.Model, approved = approvedCount, indexed }, JsonOptions));
-                    EnsureBenchmarkCoverage(approvedCount, indexed);
-                    await EvaluateAsync("semantic", questions, topK, q => retrieval.SearchWithModeAsync(q, "semantic", true));
-                    await EvaluateAsync("hybrid", questions, topK, q => retrieval.SearchWithModeAsync(q, "hybrid", true));
+                    var coverage = await ReportCoverageAsync();
+                    EnsureBenchmarkCoverage(coverage.Approved, coverage.Indexed);
+                    var semanticFailures = await EvaluateAsync("semantic", questions, sriLankanTitles,
+                        q => retrieval.SearchWithModeAsync(q, "semantic", strict: true, evaluationTopK: 5));
+                    var hybridFailures = await EvaluateAsync("hybrid", questions, sriLankanTitles,
+                        q => retrieval.SearchWithModeAsync(q, "hybrid", strict: true, evaluationTopK: 5));
+                    if (semanticFailures + hybridFailures > 0)
+                        throw new InvalidOperationException("Semantic or hybrid evaluation had retrieval failures.");
                 }
                 else Console.WriteLine("Semantic and hybrid benchmarks require Knowledge:EmbeddingUrl and indexed vectors.");
                 break;
             default:
-                throw new ArgumentException("Commands: seed | list | import FILE | update ID FILE | review ID | approve ID | delete ID | enable-vector | reindex | evaluate FILE");
+                throw new ArgumentException("Commands: seed | list | import FILE | update ID FILE | review ID | approve ID | delete ID | enable-vector | reindex | coverage | evaluate FILE");
         }
+    }
+
+    private async Task<(int Approved, int Indexed)> ReportCoverageAsync()
+    {
+        var approved = await db.KnowledgeChunks.CountAsync(c =>
+            c.Document != null && c.Document.Approved && c.Document.Language == "en");
+        var storageReady = await db.Database.SqlQuery<bool>(
+            $"""SELECT to_regclass('"KnowledgeEmbeddings"') IS NOT NULL AS "Value" """).SingleAsync();
+        var indexed = storageReady ? await KnowledgeVectors.CountIndexedApprovedChunksAsync(db, embeddings.Model) : 0;
+        Console.WriteLine(JsonSerializer.Serialize(new { model = embeddings.Model, approved, indexed, storageReady }, JsonOptions));
+        return (approved, indexed);
     }
 
     public static void EnsureBenchmarkCoverage(int approved, int indexed)
@@ -113,45 +134,76 @@ public sealed class KnowledgeCli(NutriPathDbContext db, IEmbeddingService embedd
             throw new InvalidOperationException("Semantic evaluation requires all approved English chunks to be indexed for the configured model.");
     }
 
-    private static async Task EvaluateAsync(string mode, EvaluationQuestion[] questions, int topK,
+    private static async Task<int> EvaluateAsync(string mode, EvaluationQuestion[] questions, HashSet<string> sriLankanTitles,
         Func<string, Task<List<KnowledgeChunk>>> search, bool legacy = false)
     {
-        var recall = 0d;
-        var precision = 0d;
-        var reciprocalRank = 0d;
+        var evidence = new List<RetrievalJudgment>();
         var noEvidenceReturns = 0;
-        var positives = 0;
         var negatives = 0;
+        var failures = new Dictionary<string, int>();
         var latency = new List<double>();
         foreach (var q in questions)
         {
             var expected = legacy ? q.LegacyTitles : q.ExpectedTitles;
             var start = System.Diagnostics.Stopwatch.GetTimestamp();
-            var results = (await search(q.Question)).Select(c => c.Document?.Title ?? c.Title)
-                .Distinct().ToList();
-            latency.Add(System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+            List<string> results;
+            try
+            {
+                results = (await search(q.Question)).Select(c => c.Document?.Title ?? c.Title).Distinct().ToList();
+                latency.Add(System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or
+                InvalidOperationException or Npgsql.NpgsqlException or JsonException or FormatException)
+            {
+                var type = ex.GetType().Name;
+                failures[type] = failures.GetValueOrDefault(type) + 1;
+                results = [];
+            }
             if (q.ExpectedTitles.Length == 0)
             {
                 negatives++;
                 if (results.Count > 0) noEvidenceReturns++;
                 continue;
             }
-            positives++;
-            var hits = results.Count(expected.Contains);
-            var position = results.FindIndex(expected.Contains);
-            recall += expected.Length == 0 ? 0 : (double)hits / expected.Length;
-            precision += (double)hits / topK;
-            reciprocalRank += position < 0 ? 0 : 1d / (position + 1);
+            evidence.Add(new(expected, results, q.ExpectedTitles.Any(sriLankanTitles.Contains)));
         }
-        if (positives == 0 || negatives == 0) throw new ArgumentException("Evaluation needs positive and negative cases.");
+        if (evidence.Count == 0 || negatives == 0) throw new ArgumentException("Evaluation needs positive and negative cases.");
         latency.Sort();
+        double? Percentile(double fraction) =>
+            latency.Count == 0 ? null : latency[(int)Math.Ceiling(latency.Count * fraction) - 1];
         Console.WriteLine(JsonSerializer.Serialize(new
         {
-            mode, topK, positives, negatives, recall = recall / positives, precision = precision / positives,
-            mrr = reciprocalRank / positives, meanMs = latency.Average(), p95Ms = latency[(int)Math.Ceiling(latency.Count * .95) - 1],
+            mode, positives = evidence.Count, negatives, failures,
+            p50Ms = Percentile(.50), p95Ms = Percentile(.95),
+            overall = new[] { Score(evidence, 3), Score(evidence, 5) },
+            sriLankan = new[] { Score(evidence.Where(j => j.SriLankan).ToList(), 3),
+                Score(evidence.Where(j => j.SriLankan).ToList(), 5) },
             noEvidenceReturnRate = (double)noEvidenceReturns / negatives,
         }, JsonOptions));
+        return failures.Values.Sum();
     }
+
+    private static object Score(List<RetrievalJudgment> judgments, int k)
+    {
+        var recalls = 0d;
+        var precisions = 0d;
+        var reciprocalRanks = 0d;
+        foreach (var judgment in judgments)
+        {
+            var matches = judgment.Results.Take(k).Select(judgment.Expected.Contains).ToList();
+            var hits = matches.Count(match => match);
+            recalls += judgment.Expected.Length == 0 ? 0 : (double)hits / judgment.Expected.Length;
+            precisions += (double)hits / k;
+            var first = matches.IndexOf(true);
+            reciprocalRanks += first < 0 ? 0 : 1d / (first + 1);
+        }
+        var count = judgments.Count;
+        return new { k, count, recall = count == 0 ? (double?)null : recalls / count,
+            precision = count == 0 ? (double?)null : precisions / count,
+            mrr = count == 0 ? (double?)null : reciprocalRanks / count };
+    }
+
+    private sealed record RetrievalJudgment(string[] Expected, List<string> Results, bool SriLankan);
 
     private Task<KnowledgeDocument> FindAsync(Guid id) =>
         db.KnowledgeDocuments.Include(d => d.Chunks).SingleAsync(d => d.Id == id);

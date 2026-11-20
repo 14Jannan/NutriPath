@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NutriPath.Api.Data;
 
@@ -22,7 +24,10 @@ public sealed class LocalEmbeddingService(HttpClient client, IConfiguration conf
         var url = new Uri(configuration["Knowledge:EmbeddingUrl"]!);
         if (url.Scheme != Uri.UriSchemeHttp && url.Scheme != Uri.UriSchemeHttps)
             throw new InvalidOperationException("Configure a private HTTP(S) embedding endpoint.");
-        using var response = await client.PostAsJsonAsync(url, new { model = Model, texts }, cancellationToken);
+        // The local worker requires a bounded Content-Length before reading the body.
+        using var body = new StringContent(JsonSerializer.Serialize(new { model = Model, texts }),
+            Encoding.UTF8, "application/json");
+        using var response = await client.PostAsync(url, body, cancellationToken);
         response.EnsureSuccessStatusCode();
         var result = await response.Content.ReadFromJsonAsync<EmbeddingResponse>(cancellationToken);
         if (result?.Model != Model || result.Vectors is not { } vectors || vectors.Length != texts.Length ||
