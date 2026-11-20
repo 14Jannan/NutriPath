@@ -8,6 +8,7 @@ public interface IAuthService
     Task VerifyOtpAsync(VerifyOtpRequest request);
     Task<AuthResponse> LoginAsync(LoginRequest request);
     Task<AuthResponse> RefreshAsync(RefreshRequest request);
+    Task LogoutAsync(string refreshToken);
     Task ForgotPasswordAsync(ForgotPasswordRequest request);
     Task ResetPasswordAsync(ResetPasswordRequest request);
 }

@@ -19,17 +19,28 @@ public class GroqClient : IGroqClient
             new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
     }
 
-    public async Task<GroqReply> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage>? history = null)
+    public Task<GroqReply> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage>? history = null) =>
+        AskCoreAsync(systemPrompt, userMessage, history, false);
+
+    public Task<GroqReply> AskJsonAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage> history) =>
+        AskCoreAsync(systemPrompt, userMessage, history, true);
+
+    private async Task<GroqReply> AskCoreAsync(string systemPrompt, string userMessage,
+        IReadOnlyList<GroqMessage>? history, bool json)
     {
         var messages = new List<GroqMessage> { new() { Role = "system", Content = systemPrompt } };
         messages.AddRange(history ?? Array.Empty<GroqMessage>());
         messages.Add(new GroqMessage { Role = "user", Content = userMessage });
 
-        var request = new GroqChatRequest { Model = _settings.Model, Messages = messages };
+        var request = new GroqChatRequest
+        {
+            Model = _settings.Model, Messages = messages,
+            ResponseFormat = json ? new GroqResponseFormat("json_object") : null,
+        };
 
         // Relative path, no leading slash — a leading "/" would replace
         // BaseAddress's "/openai/v1/" path instead of appending to it.
-        var response = await _httpClient.PostAsJsonAsync("chat/completions", request);
+        using var response = await _httpClient.PostAsJsonAsync("chat/completions", request);
 
         // Fail fast on a bad key or rate limit, rather than crashing
         // confusingly later when the parsed result turns out to be null.

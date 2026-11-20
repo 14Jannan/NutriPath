@@ -22,12 +22,17 @@ public class NutriPathDbContext : DbContext
     public DbSet<Meal> Meals => Set<Meal>();
     public DbSet<MealItem> MealItems => Set<MealItem>();
     public DbSet<KnowledgeChunk> KnowledgeChunks => Set<KnowledgeChunk>();
+    public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
     public DbSet<AiConversation> AiConversations => Set<AiConversation>();
     public DbSet<AiMessage> AiMessages => Set<AiMessage>();
     public DbSet<AiUsageRecord> AiUsageRecords => Set<AiUsageRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<KnowledgeDocument>().HasIndex(d => d.ContentHash).IsUnique();
+        modelBuilder.Entity<KnowledgeDocument>().Property(d => d.ContentHash).IsConcurrencyToken();
+        modelBuilder.Entity<User>().Property(u => u.RefreshTokenHash).IsConcurrencyToken();
+
         // A user's email must be unique — enforced at the database level,
         // not just checked in application code, so it holds true even
         // under concurrent requests.

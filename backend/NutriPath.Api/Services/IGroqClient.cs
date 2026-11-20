@@ -9,4 +9,6 @@ public interface IGroqClient
     /// conversation, oldest first, so follow-up questions make sense.
     /// </summary>
     Task<GroqReply> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage>? history = null);
+    Task<GroqReply> AskJsonAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage> history) =>
+        AskAsync(systemPrompt, userMessage, history);
 }

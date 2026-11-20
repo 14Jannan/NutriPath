@@ -84,6 +84,7 @@ public class MessageEncryptionTests
         var messages = await service.GetConversationMessagesAsync(user.Id, reply.ConversationId);
         Assert.Equal("I have diabetes, what can I eat?", messages[0].Content);
         Assert.Equal("Try dhal and red rice.", messages[1].Content);
+        Assert.Equal(Source.SourceUrl, Assert.Single(messages[1].References!).Url);
         Assert.Equal("I have diabetes, what can I eat?", (await service.ListConversationsAsync(user.Id))[0].Title);
         Assert.Single(await service.SearchAsync(user.Id, "DIABETES"));
     }
@@ -119,15 +120,23 @@ public class MessageEncryptionTests
         public Task<string> BuildContextAsync(Guid userId, string userQuestion, ClientClock clock) => Task.FromResult("{}");
     }
 
+    private static readonly KnowledgeDocument Source = new()
+    {
+        Title = "Test source", SourceUrl = "https://example.org/source", Approved = true,
+    };
+
     private sealed class StubRetrieval : IKnowledgeRetrievalService
     {
         public Task EnsureIndexBuiltAsync() => Task.CompletedTask;
-        public List<KnowledgeChunk> Search(string query, int topK) => new();
+        public List<KnowledgeChunk> Search(string query, int topK) => [new() { Document = Source, DocumentId = Source.Id }];
     }
 
     private sealed class StubGroq : IGroqClient
     {
         public Task<GroqReply> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage>? history = null) =>
-            Task.FromResult(new GroqReply("Try dhal and red rice.", 1000));
+            Task.FromResult(new GroqReply(System.Text.Json.JsonSerializer.Serialize(new
+            {
+                answer = "Try dhal and red rice.", sourceIds = new[] { Source.Id }, insufficientEvidence = false,
+            }), 1000));
     }
 }

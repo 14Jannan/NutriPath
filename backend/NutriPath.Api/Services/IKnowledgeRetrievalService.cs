@@ -6,4 +6,5 @@ public interface IKnowledgeRetrievalService
 {
     Task EnsureIndexBuiltAsync();
     List<KnowledgeChunk> Search(string query, int topK);
+    Task<List<KnowledgeChunk>> SearchAsync(string query) => Task.FromResult(Search(query, 3));
 }

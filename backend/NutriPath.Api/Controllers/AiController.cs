@@ -43,6 +43,8 @@ public class AiController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.Question))
             return BadRequest(new { message = "A question is required." });
+        if (request.Question.Length > 2000)
+            return BadRequest(new { message = "Please keep questions under 2,000 characters." });
         if (!ClientDate.TryResolveClock(request.LocalDate, request.LocalDateTime, out var clock))
             return BadRequest(new { message = "Your device's date or time looks wrong. Please check your clock." });
 
@@ -62,6 +64,11 @@ public class AiController : ControllerBase
         catch (KeyNotFoundException ex)
         {
             return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new { message = "The assistant is temporarily unavailable. Please try again." });
         }
     }
 

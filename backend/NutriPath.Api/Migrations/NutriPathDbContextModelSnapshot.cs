@@ -199,13 +199,70 @@ namespace NutriPath.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("DocumentId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DocumentId");
+
                     b.ToTable("KnowledgeChunks");
+                });
+
+            modelBuilder.Entity("NutriPath.Api.Models.KnowledgeDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Approved")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContentHash")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Organization")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly?>("PublicationDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SourceUrl")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContentHash")
+                        .IsUnique();
+
+                    b.ToTable("KnowledgeDocuments");
                 });
 
             modelBuilder.Entity("NutriPath.Api.Models.Meal", b =>
@@ -354,6 +411,7 @@ namespace NutriPath.Api.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("RefreshTokenHash")
+                        .IsConcurrencyToken()
                         .HasColumnType("text");
 
                     b.HasKey("Id");
@@ -477,6 +535,15 @@ namespace NutriPath.Api.Migrations
                     b.Navigation("DataSource");
                 });
 
+            modelBuilder.Entity("NutriPath.Api.Models.KnowledgeChunk", b =>
+                {
+                    b.HasOne("NutriPath.Api.Models.KnowledgeDocument", "Document")
+                        .WithMany("Chunks")
+                        .HasForeignKey("DocumentId");
+
+                    b.Navigation("Document");
+                });
+
             modelBuilder.Entity("NutriPath.Api.Models.Meal", b =>
                 {
                     b.HasOne("NutriPath.Api.Models.User", "User")
@@ -532,6 +599,11 @@ namespace NutriPath.Api.Migrations
             modelBuilder.Entity("NutriPath.Api.Models.AiConversation", b =>
                 {
                     b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("NutriPath.Api.Models.KnowledgeDocument", b =>
+                {
+                    b.Navigation("Chunks");
                 });
 
             modelBuilder.Entity("NutriPath.Api.Models.Meal", b =>

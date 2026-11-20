@@ -8,6 +8,9 @@ namespace NutriPath.Api.Models;
 
 public class GroqChatRequest
 {
+    [JsonPropertyName("response_format")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public GroqResponseFormat? ResponseFormat { get; set; }
     [JsonPropertyName("model")]
     public string Model { get; set; } = string.Empty;
 
@@ -17,6 +20,8 @@ public class GroqChatRequest
     [JsonPropertyName("temperature")]
     public double Temperature { get; set; } = 0.4; // lower = more consistent, less "creative" with numbers
 }
+
+public record GroqResponseFormat([property: JsonPropertyName("type")] string Type);
 
 public class GroqMessage
 {

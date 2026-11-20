@@ -13,7 +13,15 @@ export interface AiUsageStatus {
   resetsAtUtc: string | null;
 }
 
+export interface KnowledgeSource {
+  id: string;
+  title: string;
+  url: string;
+}
+
 export interface ChatResponse {
+  references?: KnowledgeSource[];
+  insufficientEvidence?: boolean;
   answer: string;
   sourcesUsed: string[];
   // The conversation this answer was saved to.
@@ -23,6 +31,8 @@ export interface ChatResponse {
 }
 
 export interface ChatHistoryMessage {
+  references?: KnowledgeSource[];
+  insufficientEvidence?: boolean;
   id: string;
   role: string; // "User" or "Assistant"
   content: string;
