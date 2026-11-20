@@ -7,14 +7,10 @@ import * as authApi from '@/api/authApi';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 
 const mockTokens = new Map<string, string>();
-jest.mock('@/api/tokenStorage', () => ({
-  getItemAsync: async (key: string) => mockTokens.get(key) ?? null,
-  setItemAsync: async (key: string, value: string) => {
-    mockTokens.set(key, value);
-  },
-  deleteItemAsync: async (key: string) => {
-    mockTokens.delete(key);
-  },
+jest.mock('@/api/client', () => ({
+  restoreSession: async () => mockTokens.has('nutripath.accessToken'),
+  getSessionVersion: () => 0,
+  onSessionEnded: () => () => {},
 }));
 jest.mock('@/api/profileApi', () => ({ getMyProfile: jest.fn() }));
 jest.mock('@/api/authApi', () => ({ login: jest.fn(), logout: jest.fn() }));
@@ -53,6 +49,7 @@ describe('AuthContext profile gate', () => {
     await act(() => result.current.loginUser('a@b.com', 'pw'));
 
     expect(result.current.profileStatus).toBe('complete');
+    expect(result.current.loginRequired).toBe(true);
   });
 
   it('checks a saved session on app start', async () => {

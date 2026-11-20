@@ -26,10 +26,9 @@ public class KnowledgeRetrievalService : IKnowledgeRetrievalService
 
     private readonly IServiceScopeFactory _scopeFactory;
 
-    // Guards the one-time build: two first requests arriving together
-    // must not both build (and half-overwrite) the index.
+    // Rebuild periodically so CLI changes reach each API process.
     private readonly SemaphoreSlim _buildLock = new(1, 1);
-    private volatile bool _isBuilt;
+    private long _refreshAfterTicks;
 
     private List<KnowledgeChunk> _chunks = new();
     private List<Dictionary<string, double>> _chunkVectors = new();
@@ -42,21 +41,21 @@ public class KnowledgeRetrievalService : IKnowledgeRetrievalService
 
     public async Task EnsureIndexBuiltAsync()
     {
-        if (_isBuilt) return;
-
+        if (DateTime.UtcNow.Ticks < Volatile.Read(ref _refreshAfterTicks)) return;
         await _buildLock.WaitAsync();
         try
         {
-            if (_isBuilt) return;
+            if (DateTime.UtcNow.Ticks < _refreshAfterTicks) return;
 
             // A Singleton can't directly depend on the Scoped DbContext, so
             // we create a short-lived scope just to load the data once.
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<NutriPathDbContext>();
 
-            _chunks = await db.KnowledgeChunks.AsNoTracking().ToListAsync();
+            _chunks = await db.KnowledgeChunks.AsNoTracking()
+                .Where(c => c.Document != null && c.Document.Approved && c.Document.Language == "en").ToListAsync();
             BuildTfIdfIndex();
-            _isBuilt = true;
+            Volatile.Write(ref _refreshAfterTicks, DateTime.UtcNow.AddSeconds(10).Ticks);
         }
         finally
         {
@@ -64,22 +63,40 @@ public class KnowledgeRetrievalService : IKnowledgeRetrievalService
         }
     }
 
-    public List<KnowledgeChunk> Search(string query, int topK)
+    public List<KnowledgeChunk> Search(string query, int topK) => Search(query, topK, 0);
+
+    public List<KnowledgeChunk> Search(string query, int topK, double minimumSimilarity)
     {
-        if (!_isBuilt || _chunks.Count == 0) return new List<KnowledgeChunk>();
+        _buildLock.Wait();
+        try
+        {
+            if (_chunks.Count == 0) return [];
 
-        var queryVector = Vectorize(Tokenize(query));
+            var queryVector = Vectorize(Tokenize(query));
 
-        return _chunks
-            .Select((chunk, i) => (chunk, score: CosineSimilarity(queryVector, _chunkVectors[i])))
-            .Where(s => s.score > 0) // don't return completely unrelated chunks
-            .OrderByDescending(s => s.score)
-            .Take(topK)
-            .Select(s => s.chunk)
-            .ToList();
+            return _chunks
+                .Select((chunk, i) => (chunk, score: CosineSimilarity(queryVector, _chunkVectors[i])))
+                .Where(s => s.score > minimumSimilarity)
+                .OrderByDescending(s => s.score)
+                .ThenBy(s => s.chunk.Title, StringComparer.Ordinal)
+                .ThenBy(s => s.chunk.Id)
+                .Take(topK)
+                .Select(s => s.chunk)
+                .ToList();
+        }
+        finally
+        {
+            _buildLock.Release();
+        }
     }
 
-    private void BuildTfIdfIndex()
+    internal void LoadForEvaluation(List<KnowledgeChunk> chunks)
+    {
+        _chunks = chunks;
+        BuildTfIdfIndex(legacy: true);
+    }
+
+    private void BuildTfIdfIndex(bool legacy = false)
     {
         var tokenizedDocs = _chunks.Select(c => Tokenize($"{c.Title} {c.Content}")).ToList();
 
@@ -98,7 +115,8 @@ public class KnowledgeRetrievalService : IKnowledgeRetrievalService
         var totalDocs = tokenizedDocs.Count;
         _idf = documentFrequency.ToDictionary(
             kv => kv.Key,
-            kv => Math.Log((double)totalDocs / kv.Value));
+            kv => legacy ? Math.Log((double)totalDocs / kv.Value)
+                : 1 + Math.Log((totalDocs + 1d) / (kv.Value + 1d)));
 
         _chunkVectors = tokenizedDocs.Select(Vectorize).ToList();
     }

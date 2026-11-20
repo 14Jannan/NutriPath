@@ -13,7 +13,7 @@ public class SriLankanFoodSeederTests
     {
         var db = TestDb.Create();
 
-        Assert.Equal(4, await SriLankanFoodSeeder.SeedAsync(db, SeedPath));
+        Assert.Equal(7, await SriLankanFoodSeeder.SeedAsync(db, SeedPath));
 
         var kottu = db.Foods.Single(f => f.Name == "Chicken Kottu Roti");
         Assert.Equal(176m, kottu.Calories);
@@ -24,6 +24,11 @@ public class SriLankanFoodSeederTests
         var hopper = db.Foods.Single(f => f.Name.StartsWith("Egg Hopper"));
         Assert.Equal(150m, hopper.ServingSizeGrams); // kept per hopper, not converted
         Assert.Contains("eggs", hopper.Allergens);
+
+        var pittu = db.Foods.Single(f => f.Name == "Pittu (White Rice)");
+        Assert.Equal(160m, pittu.ServingSizeGrams);
+        Assert.Equal(5.7m, pittu.FiberGrams);
+        Assert.Equal(456m, pittu.SodiumMilligrams);
     }
 
     [Fact]
@@ -36,7 +41,7 @@ public class SriLankanFoodSeederTests
 
         Assert.Equal(1, await SriLankanFoodSeeder.SeedAsync(db, SeedPath));
 
-        Assert.Equal(4, db.Foods.Count());
+        Assert.Equal(7, db.Foods.Count());
         Assert.Equal(2, db.DataSources.Count());
         Assert.Equal(176m, db.Foods.Single(f => f.Name == "Chicken Kottu Roti").Calories);
     }

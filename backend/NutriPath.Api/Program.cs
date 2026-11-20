@@ -1,6 +1,8 @@
 using System.Text;
+using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using NutriPath.Api;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -9,7 +11,8 @@ using NutriPath.Api.Data;
 using NutriPath.Api.Models;
 using NutriPath.Api.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+var knowledgeCommand = args.FirstOrDefault() == "knowledge";
+var builder = WebApplication.CreateBuilder(knowledgeCommand ? [] : args);
 
 // Render (and most cloud hosts) assign the port at runtime via PORT; Kestrel
 // won't pick it up on its own. Locally PORT is unset, so launchSettings.json
@@ -69,25 +72,33 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-builder.Services.AddCors(options =>
+var allowedOrigins = builder.Configuration.GetSection("WebAuth:AllowedOrigins").Get<string[]>() ?? [];
+if (allowedOrigins.Length == 0)
 {
-    options.AddDefaultPolicy(policy =>
-    {
-        if (builder.Environment.IsDevelopment())
-        {
-            // The mobile app is requested from a browser (web target), an
-            // emulator, or a phone on the LAN, each a different origin. Auth
-            // uses a Bearer header, not cookies, so AllowAnyOrigin is safe here.
-            policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
-        }
-        else
-        {
-            // Set to the real deployed frontend origin at deployment time.
-            policy.WithOrigins(builder.Configuration["AllowedOrigin"] ?? "https://nutripath.app")
-                .AllowAnyMethod()
-                .AllowAnyHeader();
-        }
-    });
+    var legacyOrigin = builder.Configuration["AllowedOrigin"];
+    allowedOrigins = !string.IsNullOrWhiteSpace(legacyOrigin) ? [legacyOrigin]
+        : builder.Environment.IsDevelopment()
+            ? ["http://localhost:8081", "http://localhost:19006"]
+            : [];
+}
+if (allowedOrigins.Any(origin =>
+    !Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+    || origin != uri.GetLeftPart(UriPartial.Authority)
+    || origin.Contains('*')
+    || (uri.Scheme != "https" && !(builder.Environment.IsDevelopment() && uri.Scheme == "http"))))
+    throw new InvalidOperationException("Configure WebAuth allowed origins as exact frontend origins without a trailing slash.");
+
+var crossSiteCookie = builder.Configuration.GetValue<bool>("WebAuth:CrossSiteCookie");
+builder.Services.AddSingleton(new WebAuthSettings(
+    allowedOrigins, !builder.Environment.IsDevelopment() || crossSiteCookie, crossSiteCookie));
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
+    policy.WithOrigins(allowedOrigins).AllowAnyMethod().AllowAnyHeader().AllowCredentials()));
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedProto;
+    foreach (var address in builder.Configuration.GetSection("Https:KnownProxies").Get<string[]>() ?? [])
+        options.KnownProxies.Add(IPAddress.Parse(address));
 });
 
 builder.Services.AddRateLimiter(options =>
@@ -148,18 +159,30 @@ builder.Services.AddSingleton<IMessageProtector>(new AesGcmMessageProtector(mess
 
 // Singleton: the TF-IDF index is built once and shared by every request.
 // It depends on the Scoped DbContext only via a short-lived scope.
-builder.Services.AddSingleton<IKnowledgeRetrievalService, KnowledgeRetrievalService>();
+builder.Services.AddSingleton<KnowledgeRetrievalService>();
+builder.Services.AddScoped<HybridKnowledgeRetrieval>();
+builder.Services.AddScoped<IKnowledgeRetrievalService>(sp => sp.GetRequiredService<HybridKnowledgeRetrieval>());
+builder.Services.AddScoped<KnowledgeCli>();
+builder.Services.AddHttpClient<IEmbeddingService, LocalEmbeddingService>(client =>
+    client.Timeout = TimeSpan.FromSeconds(8))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        AllowAutoRedirect = false,
+        UseProxy = false,
+    });
 
 builder.Services.AddHttpClient<IUsdaFoodSyncService, UsdaFoodSyncService>();
 
 // Imports everyday foods on startup when the catalog is nearly empty.
 builder.Services.AddHostedService<StarterFoodCatalogSeeder>();
-builder.Services.AddHttpClient<IGroqClient, GroqClient>();
+builder.Services.AddHttpClient<IGroqClient, GroqClient>(client => client.Timeout = TimeSpan.FromSeconds(30));
 
 builder.Services.AddDbContext<NutriPathDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
 var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()!;
+if (Encoding.UTF8.GetByteCount(jwtSettings.Key) < 32)
+    throw new InvalidOperationException("Configure Jwt:Key with at least 32 bytes.");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -171,6 +194,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidAudience = jwtSettings.Audience,
             ValidateIssuerSigningKey = true,
+            ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Key)),
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(30), // small tolerance for clock drift, not the full 5-minute .NET default
@@ -180,6 +204,23 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+if (knowledgeCommand)
+{
+    using var scope = app.Services.CreateScope();
+    try
+    {
+        await scope.ServiceProvider.GetRequiredService<KnowledgeCli>().RunAsync(args[1..]);
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or IOException or
+        System.Text.Json.JsonException or HttpRequestException or OperationCanceledException or
+        DbUpdateException or Npgsql.NpgsqlException or FormatException)
+    {
+        Console.Error.WriteLine($"Knowledge command failed ({ex.GetType().Name}).");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
 
 // Seed the AI knowledge base on startup if it's empty. AppContext.BaseDirectory
 // (where the compiled .dll lives, and where the .csproj copies the JSON) is
@@ -223,7 +264,22 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+app.UseForwardedHeaders();
+if (app.Environment.IsProduction())
+{
+    app.UseHsts();
+    app.UseHttpsRedirection();
+    // Redirection can be skipped by the framework when no HTTPS port is known.
+    app.Use(async (context, next) =>
+    {
+        if (!context.Request.IsHttps)
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+        await next(context);
+    });
+}
 
 // CORS must run before Authentication/Authorization and before
 // MapControllers — otherwise the browser's preflight (OPTIONS) request

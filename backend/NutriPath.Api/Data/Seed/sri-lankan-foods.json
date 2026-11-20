@@ -1,5 +1,5 @@
 {
-  "_note": "Sri Lankan dishes with verified numbers only. Values are for servingSizeGrams as given by the source (not converted). Fibre, sugar and sodium were not available and are stored as 0 (unknown). Add a dish here only once real values are found; never estimate.",
+  "_note": "Sri Lankan dishes with verified numbers only. Values are for servingSizeGrams as given by the source (not converted). Fibre, sugar and sodium are stored as 0 (unknown) where the source does not give them. Add a dish here only once real values are found; never estimate.",
   "sources": [
     {
       "name": "Sri Lanka Food Composition Database",
@@ -50,6 +50,42 @@
           "proteinGrams": 16,
           "carbsGrams": 65,
           "fatGrams": 27
+        },
+        {
+          "externalId": "lk-kadala-vadai",
+          "name": "Kadala Vadai (Parippu Vadai)",
+          "servingSizeGrams": 100,
+          "calories": 324,
+          "proteinGrams": 13.6,
+          "carbsGrams": 28,
+          "fatGrams": 17.5,
+          "fiberGrams": 0.5,
+          "sugarGrams": 0,
+          "sodiumMilligrams": 450
+        },
+        {
+          "externalId": "lk-ulundu-vadai",
+          "name": "Ulundu Vadai",
+          "servingSizeGrams": 100,
+          "calories": 287,
+          "proteinGrams": 10.5,
+          "carbsGrams": 25.3,
+          "fatGrams": 16,
+          "fiberGrams": 0.5,
+          "sugarGrams": 0,
+          "sodiumMilligrams": 324
+        },
+        {
+          "externalId": "lk-pittu-white-rice",
+          "name": "Pittu (White Rice)",
+          "servingSizeGrams": 160,
+          "calories": 426,
+          "proteinGrams": 6.5,
+          "carbsGrams": 57.1,
+          "fatGrams": 19.8,
+          "fiberGrams": 5.7,
+          "sugarGrams": 0,
+          "sodiumMilligrams": 456
         }
       ]
     }

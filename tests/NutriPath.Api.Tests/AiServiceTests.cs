@@ -27,13 +27,48 @@ public class AiServiceTests
     private sealed class FakeGroq : IGroqClient
     {
         public List<IReadOnlyList<GroqMessage>> Histories { get; } = new();
+        public List<string> Prompts { get; } = new();
+        public string? FixedReply { get; set; }
         private int _replies;
 
         public Task<GroqReply> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage>? history = null)
         {
             Histories.Add(history ?? Array.Empty<GroqMessage>());
-            return Task.FromResult(new GroqReply($"answer {++_replies}", 1000));
+            Prompts.Add(userMessage);
+            if (FixedReply is { } reply) return Task.FromResult(new GroqReply(reply, 1000));
+            return Task.FromResult(new GroqReply(System.Text.Json.JsonSerializer.Serialize(new
+            {
+                answer = $"answer {++_replies}", sourceIds = Array.Empty<Guid>(), insufficientEvidence = false,
+            }), 1000));
         }
+    }
+
+    [Fact]
+    public async Task ChatUsesFreshTargetsForTheAuthenticatedUserAndRejectsStaleQuantities()
+    {
+        await using var db = TestDb.Create();
+        var user = TestDb.AddUser(db, new UserProfile { TargetCalories = 2173, TargetProteinGrams = 113 });
+        TestDb.AddUser(db, new UserProfile { TargetCalories = 2917, TargetProteinGrams = 173 });
+        var groq = new FakeGroq
+        {
+            FixedReply = """{"answer":"Your current calorie target is 2,173 kcal.","sourceIds":[],"insufficientEvidence":false}""",
+        };
+        var context = new AiContextBuilder(db, new NutritionCalculationService(db), new WeeklyScoreService(db));
+        var service = new AiService(context, new FakeRetrieval(), groq, db, Protector);
+
+        var first = await service.ChatAsync(user.Id, "What is my calorie goal?", Clock);
+        Assert.Contains("2,173 kcal", first.Answer);
+        Assert.Contains("2173", groq.Prompts[0]);
+        Assert.DoesNotContain("2917", groq.Prompts[0]);
+        Assert.Empty(first.References!);
+
+        user.Profile!.TargetCalories = 2317;
+        await db.SaveChangesAsync();
+        var second = await service.ChatAsync(user.Id, "What is my calorie goal now?", Clock, first.ConversationId);
+        Assert.Contains("2317", groq.Prompts[1]);
+        Assert.DoesNotContain("2173", groq.Prompts[1]);
+        Assert.True(second.InsufficientEvidence);
+        Assert.DoesNotContain("2,173 kcal", second.Answer);
     }
 
     // Test-only key: base64 of "nutripath-test-encryption-key-01" (32 bytes).

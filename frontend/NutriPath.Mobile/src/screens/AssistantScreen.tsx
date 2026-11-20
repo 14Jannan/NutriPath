@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,7 +17,7 @@ import { Card } from '@/components/Card';
 import { ChatMarkdown } from '@/components/ChatMarkdown';
 import { ChatHistorySheet } from '@/components/ChatHistorySheet';
 import * as aiApi from '@/api/aiApi';
-import type { AiUsageStatus, ChatHistoryMessage } from '@/api/aiApi';
+import type { AiUsageStatus, ChatHistoryMessage, KnowledgeSource } from '@/api/aiApi';
 import { describeApiError } from '@/api/client';
 import { isAxiosError } from 'axios';
 import { showAlert } from '@/utils/alert';
@@ -29,6 +30,8 @@ interface ChatMessage {
   text: string;
   createdAt: Date;
   failed?: boolean;
+  references?: KnowledgeSource[];
+  insufficientEvidence?: boolean;
 }
 
 const QUICK_PROMPTS = [
@@ -57,6 +60,8 @@ const fromHistory = (h: ChatHistoryMessage): ChatMessage => ({
   role: h.role.toLowerCase() === 'user' ? 'user' : 'assistant',
   text: h.content,
   createdAt: parseUtc(h.createdAtUtc),
+  references: h.references,
+  insufficientEvidence: h.insufficientEvidence,
 });
 
 const timeOf = (d: Date) => d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
@@ -185,7 +190,10 @@ export function AssistantScreen() {
       if (response.usage) setUsage(response.usage);
       setMessages((prev) => [
         ...prev,
-        { id: `local-${Date.now()}-a`, role: 'assistant', text: response.answer, createdAt: new Date() },
+        {
+          id: `local-${Date.now()}-a`, role: 'assistant', text: response.answer, createdAt: new Date(),
+          references: response.references, insufficientEvidence: response.insufficientEvidence,
+        },
       ]);
     } catch (error) {
       // Over the limit: the server says when it resets.
@@ -290,7 +298,24 @@ export function AssistantScreen() {
                         {isUser ? (
                           <Text style={styles.bubbleTextUser}>{message.text}</Text>
                         ) : (
-                          <ChatMarkdown text={message.text} style={styles.bubbleTextAssistant} />
+                          <>
+                            <ChatMarkdown text={message.text} style={styles.bubbleTextAssistant} />
+                            {message.insufficientEvidence && (
+                              <Text style={styles.time}>Limited supporting evidence</Text>
+                            )}
+                            {message.references?.filter((source) => source.url.startsWith('https://')).map((source) => (
+                              <Text
+                                key={source.id}
+                                accessibilityRole="link"
+                                style={styles.sourceLink}
+                                onPress={() => {
+                                  void Linking.openURL(source.url).catch(() => showAlert('Unable to open this source'));
+                                }}
+                              >
+                                {source.title}
+                              </Text>
+                            ))}
+                          </>
                         )}
                       </View>
                       <Text style={styles.time}>{timeOf(message.createdAt)}</Text>
@@ -390,6 +415,7 @@ export function AssistantScreen() {
 const MAX_WIDTH = 720;
 
 const styles = StyleSheet.create({
+  sourceLink: { color: colors.primary, textDecorationLine: 'underline', marginTop: spacing.xs },
   screen: { flex: 1, backgroundColor: colors.surface },
   topBar: {
     paddingHorizontal: spacing.margin,

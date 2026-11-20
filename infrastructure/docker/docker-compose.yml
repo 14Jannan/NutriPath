@@ -4,7 +4,7 @@ version: "3.9"
 # provider chosen in Phase 23 — this file never runs in production.
 services:
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     container_name: nutripath-postgres
     restart: unless-stopped
     environment:

@@ -42,7 +42,7 @@ function ProfileCheckFailed() {
 }
 
 export function RootNavigator() {
-  const { isLoggedIn, isLoading, profileStatus } = useAuth();
+  const { isLoggedIn, isLoading, loginRequired, profileStatus } = useAuth();
 
   if (isLoading || (isLoggedIn && profileStatus === 'checking')) {
     // Brief moment while we check for a saved session and, once logged
@@ -60,7 +60,11 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator
+        key={isLoggedIn ? 'authenticated' : loginRequired ? 'login' : 'welcome'}
+        initialRouteName={isLoggedIn ? undefined : loginRequired ? 'Login' : 'Welcome'}
+        screenOptions={{ headerShown: false }}
+      >
         {isLoggedIn ? (
           // Setup is mandatory: until the profile is saved, the setup
           // wizard is the only screen, so there's nothing to skip to.
@@ -93,7 +97,9 @@ export function RootNavigator() {
                 <LoginScreen
                   onGoToCreateAccount={() => navigation.navigate('CreateAccount')}
                   onForgotPassword={() => navigation.navigate('ForgotPassword')}
-                  onGoBack={() => navigation.goBack()}
+                  onGoBack={() => navigation.canGoBack()
+                    ? navigation.goBack()
+                    : navigation.navigate('Welcome')}
                 />
               )}
             </Stack.Screen>

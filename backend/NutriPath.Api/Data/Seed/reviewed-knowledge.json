@@ -1,0 +1,194 @@
+[
+  {
+    "title": "Carbohydrate quality",
+    "category": "macronutrients",
+    "organization": "World Health Organization",
+    "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+    "language": "en",
+    "content": "Carbohydrate supplies energy. For most people, whole grains, vegetables, fruits and pulses are useful everyday sources. Comparing sources is more informative than treating every carbohydrate food as equivalent."
+  },
+  {
+    "title": "Protein sources",
+    "category": "macronutrients",
+    "organization": "World Health Organization",
+    "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+    "language": "en",
+    "content": "Protein provides the building blocks for body tissues. A varied diet can obtain protein from both plant and animal sources. Pulses, nuts, fish and suitable lean meats are options within a balanced diet."
+  },
+  {
+    "title": "Unsaturated and saturated fats",
+    "category": "macronutrients",
+    "organization": "World Health Organization",
+    "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+    "language": "en",
+    "content": "Fat is an essential nutrient. Unsaturated fats from fish, nuts and some vegetable oils can replace saturated fats in foods such as butter or coconut oil. Industrial trans fats should be avoided."
+  },
+  {
+    "title": "Dietary fibre and whole foods",
+    "category": "fibre",
+    "organization": "World Health Organization",
+    "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+    "language": "en",
+    "content": "Whole grains, pulses, vegetables and whole fruit are ways to raise dietary fibre. Choose varied sources rather than assuming a single snack provides all the fibre needed."
+  },
+  {
+    "title": "Free sugars and fruit juice",
+    "category": "healthy habits",
+    "organization": "World Health Organization",
+    "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+    "language": "en",
+    "content": "Free sugars include sugars added to food and drinks and those present in honey, syrups and fruit juice. Whole fruit and juice are different choices because juice can contribute free sugars even without added sugar."
+  },
+  {
+    "title": "Salt and sodium",
+    "category": "healthy habits",
+    "organization": "World Health Organization",
+    "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+    "language": "en",
+    "content": "High sodium intake is associated with higher blood pressure. Salt added at the table or while cooking is one source; processed products and salty sauces can also contribute."
+  },
+  {
+    "title": "Balanced eating patterns",
+    "category": "meal planning",
+    "organization": "World Health Organization",
+    "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+    "language": "en",
+    "content": "A healthy eating pattern is adequate, balanced, moderate and diverse. Include several food groups and vary the foods within each group. Daily eating patterns depend on needs, available foods and culture."
+  },
+  {
+    "title": "Energy intake and balance",
+    "category": "weight management",
+    "organization": "World Health Organization",
+    "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+    "language": "en",
+    "content": "Energy balance relates food energy intake to the energy the body uses. A healthy dietary pattern balances energy while providing adequate nutrients and variety; a calorie total alone does not describe food quality."
+  },
+  {
+    "title": "Sustainable weight management",
+    "category": "weight management",
+    "organization": "Centers for Disease Control and Prevention",
+    "sourceUrl": "https://www.cdc.gov/healthy-weight-growth/losing-weight/index.html",
+    "language": "en",
+    "content": "Gradual, steady weight loss is more likely to be maintained than rapid loss. A practical plan can include eating patterns, regular activity, sleep and stress management. Start with specific, realistic steps."
+  },
+  {
+    "title": "Drinking water and hydration",
+    "category": "hydration",
+    "organization": "Centers for Disease Control and Prevention",
+    "sourceUrl": "https://www.cdc.gov/healthy-weight-growth/water-healthy-drinks/index.html",
+    "language": "en",
+    "content": "Water supports normal body function. Fluid needs can vary with age, activity and other circumstances, and some fluid comes from foods. Plain water can replace sugary drinks without adding their calories."
+  },
+  {
+    "title": "Protein and exercise recovery",
+    "category": "sports",
+    "organization": "NIH Office of Dietary Supplements",
+    "sourceUrl": "https://ods.od.nih.gov/factsheets/ExerciseAndAthleticPerformance-HealthProfessional/",
+    "language": "en",
+    "content": "Adequate dietary protein provides essential amino acids for muscle protein synthesis and supports recovery from training. Research on precise workout timing is mixed, so a rigid immediate deadline should not be presented as a certainty."
+  },
+  {
+    "title": "Sports supplements and BCAAs",
+    "category": "sports",
+    "organization": "NIH Office of Dietary Supplements",
+    "sourceUrl": "https://ods.od.nih.gov/factsheets/ExerciseAndAthleticPerformance-HealthProfessional/",
+    "language": "en",
+    "content": "Adequate food, fluids and appropriate training are the foundations of sports nutrition. Evidence that BCAA supplements add benefits beyond sufficient quality protein is inconsistent. Supplements cannot substitute for those foundations."
+  },
+  {
+    "title": "Iron and absorption",
+    "category": "micronutrients",
+    "organization": "NIH Office of Dietary Supplements",
+    "sourceUrl": "https://ods.od.nih.gov/factsheets/Iron-HealthProfessional/",
+    "language": "en",
+    "content": "Iron helps hemoglobin transport oxygen. Plant foods can provide nonheme iron, which is generally less readily absorbed than heme iron. Vitamin C consumed with a meal can support absorption of nonheme iron."
+  },
+  {
+    "title": "Vitamin D and calcium",
+    "category": "micronutrients",
+    "organization": "NIH Office of Dietary Supplements",
+    "sourceUrl": "https://ods.od.nih.gov/factsheets/VitaminD-HealthProfessional/",
+    "language": "en",
+    "content": "Vitamin D helps the body absorb calcium and supports healthy bones. Few foods naturally contain appreciable vitamin D, but some foods are fortified. General nutrition information does not establish a person's vitamin D status."
+  },
+  {
+    "title": "Vitamin B12 and plant-based eating",
+    "category": "micronutrients",
+    "organization": "NIH Office of Dietary Supplements",
+    "sourceUrl": "https://ods.od.nih.gov/factsheets/VitaminB12-HealthProfessional/",
+    "language": "en",
+    "content": "Vitamin B12 supports red blood cell formation and normal nervous system function. It naturally occurs in animal foods; people eating only plant foods can look for reliable fortified foods. Individual needs or deficiency concerns warrant professional guidance."
+  },
+  {
+    "title": "Food allergies and ingredient labels",
+    "category": "allergies",
+    "organization": "US Food and Drug Administration",
+    "sourceUrl": "https://www.fda.gov/food/nutrition-food-labeling-and-critical-foods/food-allergies",
+    "language": "en",
+    "content": "Ingredient and allergen information can help people avoid known allergens. Cross-contact can occur during preparation or manufacturing. A dish name or nutrition value alone cannot establish that a food is safe for an allergy."
+  },
+  {
+    "title": "Sri Lankan rice and curry meals",
+    "category": "Sri Lankan nutrition",
+    "organization": "Sri Lanka Ministry of Health",
+    "sourceUrl": "https://nutrition.health.gov.lk/english/publications/food-based-dietary-guidelines-for-sri-lankans-practitioners-handbook/",
+    "language": "en",
+    "content": "A rice-and-curry meal can use rice as its staple, with vegetables or leafy greens and a protein component such as dhal, fish or egg where appropriate. Variety and portions matter; one fixed nutrient estimate cannot represent all homemade curry recipes."
+  },
+  {
+    "title": "Sri Lankan breakfast staples",
+    "category": "Sri Lankan nutrition",
+    "organization": "Sri Lanka Ministry of Health",
+    "sourceUrl": "https://nutrition.health.gov.lk/english/publications/food-based-dietary-guidelines-for-sri-lankans-practitioners-handbook/",
+    "language": "en",
+    "content": "Hoppers, string hoppers and pittu can be treated as staple choices in meal planning. Apply the guideline's food-group approach by considering the other foods eaten with the staple, such as a suitable pulse, egg or vegetable side. Recipe and portion determine nutrient values."
+  },
+  {
+    "title": "Sri Lankan pulses and legumes",
+    "category": "Sri Lankan nutrition",
+    "organization": "Sri Lanka Ministry of Health",
+    "sourceUrl": "https://nutrition.health.gov.lk/english/publications/food-based-dietary-guidelines-for-sri-lankans-practitioners-handbook/",
+    "language": "en",
+    "content": "Dhal, chickpeas, cowpea and green gram are locally familiar pulses. Sri Lankan guidance encourages variety in pulses. Pulses can accompany cereal staples and contribute protein and fibre."
+  },
+  {
+    "title": "Sri Lankan fish and vegetables",
+    "category": "Sri Lankan nutrition",
+    "organization": "Sri Lanka Ministry of Health",
+    "sourceUrl": "https://nutrition.health.gov.lk/english/publications/food-based-dietary-guidelines-for-sri-lankans-practitioners-handbook/",
+    "language": "en",
+    "content": "Local meal guidance encourages varied vegetables and leafy greens alongside appropriate protein foods. Fish is one option for people who can eat it. Pulses provide another meal component where fish is unsuitable."
+  },
+  {
+    "title": "Coconut in Sri Lankan cooking",
+    "category": "Sri Lankan nutrition",
+    "organization": "Sri Lanka Ministry of Health",
+    "sourceUrl": "https://nutrition.health.gov.lk/english/publications/food-based-dietary-guidelines-for-sri-lankans-practitioners-handbook/",
+    "language": "en",
+    "content": "Consider coconut milk and coconut-based sides within the whole meal. Preparation and serving size vary across households; avoid assuming a coconut sambol or curry has a fixed nutrient value. Sri Lankan guidance addresses moderation in fats and oils."
+  },
+  {
+    "title": "Food composition records and portions",
+    "category": "food data",
+    "organization": "USDA Agricultural Research Service",
+    "sourceUrl": "https://fdc.nal.usda.gov/api-guide/",
+    "language": "en",
+    "content": "FoodData Central provides structured food and nutrient records. Use the matching food record and its stated reference quantity when interpreting values. A different preparation, brand or serving can require a different record."
+  },
+  {
+    "title": "Water and sugary drinks during routines",
+    "category": "healthy habits",
+    "organization": "Centers for Disease Control and Prevention",
+    "sourceUrl": "https://www.cdc.gov/healthy-weight-growth/water-healthy-drinks/index.html",
+    "language": "en",
+    "content": "Keeping water available makes it easier to choose during daily routines. Water is a calorie-free substitute for sugary drinks. Beverage choices and hydration can be considered alongside the rest of the diet."
+  },
+  {
+    "title": "A diverse Sri Lankan vegetarian plate",
+    "category": "Sri Lankan nutrition",
+    "organization": "Sri Lanka Ministry of Health",
+    "sourceUrl": "https://nutrition.health.gov.lk/english/publications/food-based-dietary-guidelines-for-sri-lankans-practitioners-handbook/",
+    "language": "en",
+    "content": "Vegetarian meals can combine cereals, varied pulses, vegetables and fruit. The local guidelines discuss vegetarian diets as a pattern; the composition of any particular plate depends on ingredients, amounts and preparation."
+  }
+]

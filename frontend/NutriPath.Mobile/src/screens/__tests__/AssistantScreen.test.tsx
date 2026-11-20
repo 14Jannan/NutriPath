@@ -1,4 +1,5 @@
 import React from 'react';
+import { Linking } from 'react-native';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -88,6 +89,25 @@ async function openFromHistory(title: string, reply: string) {
 }
 
 describe('AssistantScreen', () => {
+  it('opens verified source links and shows limited evidence', async () => {
+    const link = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    try {
+      api.askAssistant.mockResolvedValueOnce({
+        answer: 'Evidence is limited.', sourcesUsed: ['WHO'], conversationId: 'c1', usage,
+        references: [{ id: 'source', title: 'WHO', url: 'https://www.who.int/' }],
+        insufficientEvidence: true,
+      });
+      await renderScreen();
+      await fireEvent.changeText(screen.getByPlaceholderText('Ask NutriPath anything...'), 'What is fibre?');
+      await fireEvent.press(screen.getByLabelText('Send'));
+      expect(await screen.findByText('Limited supporting evidence')).toBeTruthy();
+      await fireEvent.press(screen.getByRole('link', { name: 'WHO' }));
+      expect(link).toHaveBeenCalledWith('https://www.who.int/');
+    } finally {
+      link.mockRestore();
+    }
+  });
+
   it('starts each session on a fresh chat, created with the first message', async () => {
     await renderScreen();
 

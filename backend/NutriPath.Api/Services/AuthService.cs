@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using NutriPath.Api.Data;
 using NutriPath.Api.DTOs;
 using NutriPath.Api.Models;
@@ -12,19 +13,22 @@ public class AuthService : IAuthService
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IEmailService _emailService;
     private readonly ILogger<AuthService> _logger;
+    private readonly JwtSettings _jwtSettings;
 
     public AuthService(
         NutriPathDbContext db,
         IPasswordHasher passwordHasher,
         IJwtTokenService jwtTokenService,
         IEmailService emailService,
-        ILogger<AuthService> logger)
+        ILogger<AuthService> logger,
+        IOptions<JwtSettings> jwtSettings)
     {
         _db = db;
         _passwordHasher = passwordHasher;
         _jwtTokenService = jwtTokenService;
         _emailService = emailService;
         _logger = logger;
+        _jwtSettings = jwtSettings.Value;
     }
 
     public async Task RegisterAsync(RegisterRequest request)
@@ -96,7 +100,7 @@ public class AuthService : IAuthService
         var user = await _db.Users.FirstOrDefaultAsync(u => u.RefreshTokenHash == hashedIncoming)
             ?? throw new UnauthorizedAccessException("Invalid refresh token.");
 
-        if (user.RefreshTokenExpiresAtUtc < DateTime.UtcNow)
+        if (user.RefreshTokenExpiresAtUtc is not { } expiresAt || expiresAt <= DateTime.UtcNow)
             throw new UnauthorizedAccessException("Refresh token expired. Please log in again.");
 
         // Rotation: issue a brand new refresh token and invalidate this
@@ -104,7 +108,32 @@ public class AuthService : IAuthService
         // used by an attacker after the real user already refreshed,
         // this old one simply won't match anymore — an early warning
         // sign worth logging/alerting on in a production system.
-        return await IssueTokensAsync(user);
+        try
+        {
+            return await IssueTokensAsync(user);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new UnauthorizedAccessException("Invalid refresh token.");
+        }
+    }
+
+    public async Task LogoutAsync(string refreshToken)
+    {
+        var hash = _jwtTokenService.HashRefreshToken(refreshToken);
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.RefreshTokenHash == hash);
+        if (user is null) return;
+
+        user.RefreshTokenHash = null;
+        user.RefreshTokenExpiresAtUtc = null;
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The presented token was already removed or replaced.
+        }
     }
 
     public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
@@ -153,7 +182,7 @@ public class AuthService : IAuthService
         var refreshToken = _jwtTokenService.CreateRefreshToken();
 
         user.RefreshTokenHash = _jwtTokenService.HashRefreshToken(refreshToken);
-        user.RefreshTokenExpiresAtUtc = DateTime.UtcNow.AddDays(30);
+        user.RefreshTokenExpiresAtUtc = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenDays);
         await _db.SaveChangesAsync();
 
         return new AuthResponse(
