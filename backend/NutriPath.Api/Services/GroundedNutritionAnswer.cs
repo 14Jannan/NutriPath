@@ -9,6 +9,7 @@ namespace NutriPath.Api.Services;
 public sealed record GroundedNutritionAnswer(string Answer, List<KnowledgeSource> References, bool InsufficientEvidence)
 {
     private const string Unverified = "I couldn't verify a grounded answer for that question. Try asking about a specific food, meal or nutrition topic.";
+    private const string UnverifiedAllergySafety = "Avoid foods that contain your known allergen. I can’t confirm that an alternative is safe from its catalogue entry. Check ingredients and cross-contact with the manufacturer or kitchen before eating.";
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
 
     public static GroundedNutritionAnswer Parse(string reply, List<KnowledgeChunk> retrieved, string structuredContext = "{}")
@@ -21,6 +22,10 @@ public sealed record GroundedNutritionAnswer(string Answer, List<KnowledgeSource
                 Regex.IsMatch(data.Answer, @"\b(?:https?://|www\.)|\]\(", RegexOptions.IgnoreCase) ||
                 HasUnsupportedQuantity(data.Answer, structuredContext))
                 return new(Unverified, [], true);
+            if (Regex.IsMatch(data.Answer,
+                @"\b(?:allerg(?:y|en)[\s\p{Pd}]+free|guaranteed\s+safe|completely\s+safe\s+for\s+your\s+allergy|(?:zero|no)\s+(?:risk\s+of\s+)?cross[\s\p{Pd}]+contact|no\s+need\s+to\s+(?:check|verify)\s+(?:the\s+)?ingredients)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                return new(UnverifiedAllergySafety, [], true);
             var approved = retrieved.Select(c => c.Document)
                 .Where(d => d is { Approved: true } && KnowledgeCli.IsSourceUrl(d.SourceUrl))
                 .DistinctBy(d => d!.Id).ToDictionary(d => d!.Id);

@@ -16,15 +16,16 @@ public sealed class HybridKnowledgeRetrieval(
     public List<KnowledgeChunk> Search(string query, int topK) => keyword.Search(query, topK);
 
     public Task<List<KnowledgeChunk>> SearchAsync(string query) =>
-        SearchWithModeAsync(query, configuration["Knowledge:RetrievalMode"] ?? "hybrid");
+        SearchWithModeAsync(query, configuration["Knowledge:RetrievalMode"] ?? "semantic");
 
-    public async Task<List<KnowledgeChunk>> SearchWithModeAsync(string query, string mode, bool strict = false)
+    public async Task<List<KnowledgeChunk>> SearchWithModeAsync(string query, string mode, bool strict = false,
+        int? evaluationTopK = null)
     {
-        var topK = Math.Clamp(configuration.GetValue("Knowledge:TopK", 3), 1, 12);
+        var topK = Math.Clamp(evaluationTopK ?? configuration.GetValue("Knowledge:TopK", 3), 1, 12);
         var count = Math.Clamp(configuration.GetValue("Knowledge:CandidateCount", 12), topK, 50);
         var minimumKeyword = Math.Clamp(configuration.GetValue("Knowledge:MinimumKeywordSimilarity", 0d), 0, 1);
         var keywords = keyword.Search(query, count, minimumKeyword).Select(c => c.Id).ToList();
-        List<Guid> semantic = [];
+        List<Guid>? semantic = null;
         if (mode != "keyword" && embeddings.Enabled && db.Database.IsNpgsql())
         {
             try
@@ -40,7 +41,11 @@ public sealed class HybridKnowledgeRetrieval(
             }
         }
 
-        var ranked = mode == "semantic" && (semantic.Count > 0 || strict) ? semantic : Fuse(keywords, semantic);
+        // An empty successful semantic search is an evidence decision. Only
+        // fall back to keywords when the semantic channel was unavailable.
+        var ranked = mode == "semantic" && (semantic is not null || strict)
+            ? semantic ?? []
+            : Fuse(keywords, semantic ?? []);
         if (ranked.Count == 0) return [];
         var candidates = await db.KnowledgeChunks.AsNoTracking().Include(c => c.Document)
             .Where(c => ranked.Contains(c.Id) && c.Document != null && c.Document.Approved && c.Document.Language == "en")

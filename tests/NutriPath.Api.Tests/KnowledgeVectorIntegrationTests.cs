@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using NutriPath.Api.Data;
 using NutriPath.Api.Models;
@@ -50,7 +53,35 @@ public class KnowledgeVectorIntegrationTests
         Assert.Equal(2, await KnowledgeVectors.CountIndexedApprovedChunksAsync(db, model));
         Assert.Equal([near.Id], await KnowledgeVectors.SearchAsync(db, query, model, 0.25, 10));
         Assert.Equal([near.Id, far.Id], await KnowledgeVectors.SearchAsync(db, query, model, 1.1, 2));
+
+        using var services = new ServiceCollection().AddSingleton(db).BuildServiceProvider();
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Knowledge:MaxVectorDistance"] = "0.25",
+        }).Build();
+        var unrelated = new float[384];
+        unrelated[2] = 1;
+        var service = new FixtureEmbeddingService(model, unrelated);
+        var retrieval = new HybridKnowledgeRetrieval(
+            new KnowledgeRetrievalService(services.GetRequiredService<IServiceScopeFactory>()), db, service, config,
+            NullLogger<HybridKnowledgeRetrieval>.Instance);
+        await retrieval.EnsureIndexBuiltAsync();
+        Assert.Empty(await retrieval.SearchAsync("vector fixture"));
+        service.Unavailable = true;
+        Assert.NotEmpty(await retrieval.SearchAsync("vector fixture"));
         await transaction.RollbackAsync();
+    }
+
+    private sealed class FixtureEmbeddingService(string model, float[] vector) : IEmbeddingService
+    {
+        public string Model => model;
+        public bool Enabled => true;
+        public bool Unavailable { get; set; }
+
+        public Task<float[][]> EmbedAsync(string[] texts, CancellationToken cancellationToken = default) =>
+            Unavailable
+                ? Task.FromException<float[][]>(new HttpRequestException("Fixture embedding worker unavailable."))
+                : Task.FromResult<float[][]>([vector]);
     }
 
     private static KnowledgeChunk AddChunk(NutriPathDbContext db, bool approved)

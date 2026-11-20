@@ -113,8 +113,14 @@ public class AiService : IAiService
                or "relevantFoodsFromDatabase", using their listed values (per servingSizeGrams).
                Never invent a dish or its nutrition values. If both lists are empty, say there
                are no suitable options in the food database right now.
+               A catalogue entry supports its listed name and values. Do not infer that a named
+               product is whole-grain, allergy-safe, or ready to eat from the name or values alone.
+               For local meal ideas, prefer culturally relevant approved guidance and compatible
+               catalogue ingredients over unrelated products.
             7) Never suggest a food that matches one of the user's "allergies", and respect
                their "dietaryPreferences" (e.g. no meat for Vegetarian, no pork for Halal).
+               If asked about allergy safety, advise avoiding the known allergen and checking
+               ingredients and cross-contact. Never guarantee an alternative is allergy-safe.
             8) Use "todaysLog" and "last7Days" to talk about what the user actually ate, and
                "loggingStreak" for their streak. If loggedToday is false and the streak is above
                0, playfully remind them to log something today to keep it alive.

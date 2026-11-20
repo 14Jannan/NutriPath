@@ -9,11 +9,13 @@ public class GroqClient : IGroqClient
 {
     private readonly HttpClient _httpClient;
     private readonly GroqSettings _settings;
+    private readonly ILogger<GroqClient> _logger;
 
-    public GroqClient(HttpClient httpClient, IOptions<GroqSettings> settings)
+    public GroqClient(HttpClient httpClient, IOptions<GroqSettings> settings, ILogger<GroqClient> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _logger = logger;
         _httpClient.BaseAddress = new Uri(_settings.BaseUrl);
         _httpClient.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
@@ -41,6 +43,8 @@ public class GroqClient : IGroqClient
         // Relative path, no leading slash — a leading "/" would replace
         // BaseAddress's "/openai/v1/" path instead of appending to it.
         using var response = await _httpClient.PostAsJsonAsync("chat/completions", request);
+        if (!response.IsSuccessStatusCode)
+            _logger.LogWarning("Groq chat completion returned HTTP {StatusCode}.", (int)response.StatusCode);
 
         // Fail fast on a bad key or rate limit, rather than crashing
         // confusingly later when the parsed result turns out to be null.
