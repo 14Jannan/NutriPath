@@ -6,6 +6,7 @@ import {
   Linking,
   Pressable,
   ScrollView,
+  type ScrollViewInstance,
   StyleSheet,
   Text,
   TextInput,
@@ -88,7 +89,7 @@ export function AssistantScreen() {
   const [usage, setUsage] = useState<AiUsageStatus | null>(null);
   const [now, setNow] = useState(Date.now());
 
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   // Each message's vertical position, so a search result can scroll to it.
   const positions = useRef(new Map<string, number>());
 

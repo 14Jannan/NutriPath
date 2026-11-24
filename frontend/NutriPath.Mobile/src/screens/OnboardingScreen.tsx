@@ -6,6 +6,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  type ScrollViewInstance,
   StyleSheet,
   Text,
   TextInput,
@@ -248,7 +249,7 @@ export function OnboardingScreen() {
   const [saving, setSaving] = useState(false);
 
   const step: Step = STEPS[stepIndex];
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   // Each step slides and fades in.
   const enter = useRef(new Animated.Value(1)).current;

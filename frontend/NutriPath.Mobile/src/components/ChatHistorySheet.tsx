@@ -158,7 +158,7 @@ export function ChatHistorySheet({ visible, currentConversationId, onClose, onOp
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.list}
               ListEmptyComponent={
-                results && !searching ? <Text style={styles.empty}>No messages match "{term}".</Text> : null
+                results && !searching ? <Text style={styles.empty}>No messages match "{term}".</Text> : undefined
               }
               renderItem={({ item }) => (
                 <Pressable
