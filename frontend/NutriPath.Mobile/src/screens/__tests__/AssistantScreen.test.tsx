@@ -120,7 +120,7 @@ describe('AssistantScreen', () => {
 
     await waitFor(() => expect(screen.getByText('Have dinner: rice and fish.')).toBeTruthy());
     expect(api.startNewConversation).toHaveBeenCalledTimes(1);
-    expect(api.askAssistant).toHaveBeenCalledWith('What about dinner?', 'c2');
+    expect(api.askAssistant).toHaveBeenCalledWith('What about dinner?', 'c2', 'auto');
   });
 
   it('continues a chat reopened from history, so the AI has its earlier messages', async () => {
@@ -132,7 +132,7 @@ describe('AssistantScreen', () => {
     await fireEvent.press(screen.getByLabelText('Send'));
 
     await waitFor(() => expect(screen.getByText('Have dinner: rice and fish.')).toBeTruthy());
-    expect(api.askAssistant).toHaveBeenCalledWith('What about dinner?', 'c1');
+    expect(api.askAssistant).toHaveBeenCalledWith('What about dinner?', 'c1', 'auto');
     expect(api.startNewConversation).not.toHaveBeenCalled();
   });
 

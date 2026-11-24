@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TextStyle, View } from 'react-native';
 import { spacing, typography } from '@/theme';
+import { scriptAwareStyle } from '@/utils/script';
 
 // "**bold**" and "*italic*" inside one line. Unmatched stars are left as-is.
 function renderInline(text: string, keyPrefix: string) {
@@ -32,7 +33,7 @@ export function ChatMarkdown({ text, style }: { text: string; style: TextStyle }
         const heading = line.match(/^#{1,6}\s+(.*)$/);
         if (heading)
           return (
-            <Text key={key} style={[style, styles.heading]}>
+            <Text key={key} style={[style, styles.heading, scriptAwareStyle(line, style)]}>
               {renderInline(heading[1].replace(/\*\*/g, ''), key)}
             </Text>
           );
@@ -46,13 +47,13 @@ export function ChatMarkdown({ text, style }: { text: string; style: TextStyle }
           return (
             <View key={key} style={[styles.listRow, indent && styles.indented]}>
               <Text style={[style, styles.marker]}>{marker}</Text>
-              <Text style={[style, styles.listText]}>{renderInline(body, key)}</Text>
+              <Text style={[style, styles.listText, scriptAwareStyle(body, style)]}>{renderInline(body, key)}</Text>
             </View>
           );
         }
 
         return (
-          <Text key={key} style={style}>
+          <Text key={key} style={[style, scriptAwareStyle(line, style)]}>
             {renderInline(line, key)}
           </Text>
         );

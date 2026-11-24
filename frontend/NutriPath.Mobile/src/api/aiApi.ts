@@ -28,6 +28,12 @@ export interface ChatResponse {
   conversationId: string;
   // Usage after this answer.
   usage?: AiUsageStatus | null;
+  // The language the answer is written in, and why it was chosen
+  // (explicit, selected, detected, preference, default or disabled).
+  language?: 'en' | 'ta' | 'si';
+  languageSource?: string;
+  // The AI provider that answered (Gemini or Groq).
+  provider?: string;
 }
 
 export interface ChatHistoryMessage {
@@ -58,16 +64,25 @@ export interface ChatSearchResult {
   createdAtUtc: string;
 }
 
+/** Reply language for a question: "auto" lets the server detect it. */
+export type ChatLanguageCode = 'auto' | 'en' | 'ta' | 'si';
+
 /**
  * Asks the assistant. Sends the device's local date, time and timezone so
- * answers about "today" or "tonight" match the user's own clock, and the
- * conversation to continue (its recent messages are the AI's memory).
+ * answers about "today" or "tonight" match the user's own clock, the
+ * conversation to continue (its recent messages are the AI's memory), and
+ * the reply language chosen in the chat.
  */
-export async function askAssistant(question: string, conversationId?: string | null): Promise<ChatResponse> {
+export async function askAssistant(
+  question: string,
+  conversationId?: string | null,
+  language: ChatLanguageCode = 'auto'
+): Promise<ChatResponse> {
   const response = await apiClient.post<ChatResponse>('/api/ai/chat', {
     question,
     localDateTime: toLocalIsoDateTime(),
     conversationId: conversationId ?? undefined,
+    language,
   });
   return response.data;
 }

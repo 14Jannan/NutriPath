@@ -24,6 +24,11 @@ import { isAxiosError } from 'axios';
 import { showAlert } from '@/utils/alert';
 import { describeDay, toLocalIsoDate } from '@/utils/date';
 import { colors, typography, spacing, radii } from '@/theme';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
+import '@/i18n';
+import { CHAT_LANGUAGES, useChatLanguage, type ChatLanguage } from '@/i18n/chatLanguage';
+import { scriptAwareStyle } from '@/utils/script';
 
 interface ChatMessage {
   id: string;
@@ -35,23 +40,21 @@ interface ChatMessage {
   insufficientEvidence?: boolean;
 }
 
+// Sent in the chat's language, so the assistant replies in it too.
 const QUICK_PROMPTS = [
-  { icon: 'silverware-fork-knife' as const, label: 'What should I eat now?' },
-  { icon: 'chart-line' as const, label: 'Explain my score' },
-  { icon: 'bread-slice-outline' as const, label: 'Suggest a high-fibre snack' },
-  { icon: 'calendar-today' as const, label: 'How am I doing today?' },
-  { icon: 'calendar-week' as const, label: 'Give me my weekly summary' },
-  { icon: 'fire' as const, label: "What's my logging streak?" },
+  { icon: 'silverware-fork-knife' as const, key: 'eatNow' },
+  { icon: 'chart-line' as const, key: 'score' },
+  { icon: 'bread-slice-outline' as const, key: 'fibreSnack' },
+  { icon: 'calendar-today' as const, key: 'today' },
+  { icon: 'calendar-week' as const, key: 'weekly' },
+  { icon: 'fire' as const, key: 'streak' },
 ];
 
 // A neutral greeting rather than hard-coded numbers — real figures only
-// ever come from the backend, via the assistant's grounded replies.
-const welcome = (): ChatMessage => ({
-  id: 'welcome',
-  role: 'assistant',
-  text: 'Hi! Ask me about your meals today, your weekly score, or what to eat next.',
-  createdAt: new Date(),
-});
+// ever come from the backend, via the assistant's grounded replies. Its
+// text is looked up at render time so it follows the chat language.
+const WELCOME_ID = 'welcome';
+const welcome = (): ChatMessage => ({ id: WELCOME_ID, role: 'assistant', text: '', createdAt: new Date() });
 
 // The server may send UTC without a zone marker; make that explicit.
 const parseUtc = (utc: string) => new Date(utc.endsWith('Z') ? utc : `${utc}Z`);
@@ -68,9 +71,9 @@ const fromHistory = (h: ChatHistoryMessage): ChatMessage => ({
 const timeOf = (d: Date) => d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
 // "2h 5m", "12m", or "less than a minute".
-function describeWait(ms: number): string {
+function describeWait(ms: number, t: TFunction): string {
   const minutes = Math.ceil(ms / 60_000);
-  if (minutes <= 1) return 'less than a minute';
+  if (minutes <= 1) return t('chat.wait.lessThanMinute');
   const hours = Math.floor(minutes / 60);
   return hours ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
 }
@@ -78,7 +81,27 @@ function describeWait(ms: number): string {
 // Warn once most of the allowance is used.
 const NEAR_LIMIT = 0.8;
 
+/** A localized explanation for a failed question. */
+function describeChatError(error: unknown, t: TFunction): string {
+  if (isAxiosError(error)) {
+    const status = error.response?.status;
+    if (!error.response) return t('chat.errors.network');
+    if (status === 409) return t('chat.errors.busy');
+    if (status === 503) {
+      if ((error.response.data as { code?: string } | undefined)?.code === 'provider_not_permitted')
+        return t('chat.errors.notPermitted');
+      const retryAfter = Number(error.response.headers?.['retry-after']);
+      return Number.isFinite(retryAfter) && retryAfter > 0
+        ? t('chat.errors.rateLimited', { wait: describeWait(retryAfter * 1000, t) })
+        : t('chat.errors.unavailable');
+    }
+  }
+  return `${t('chat.sorry')} ${describeApiError(error)}`;
+}
+
 export function AssistantScreen() {
+  const { t } = useTranslation();
+  const { language, setLanguage } = useChatLanguage();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([welcome()]);
   const [input, setInput] = useState('');
@@ -103,7 +126,7 @@ export function AssistantScreen() {
       setMessages(history.length ? history.map(fromHistory) : [welcome()]);
       setHighlightId(messageId ?? null);
     } catch (error) {
-      showAlert("Couldn't open that chat", describeApiError(error));
+      showAlert(t('chat.openChatError'), describeApiError(error));
     } finally {
       setLoadingChat(false);
     }
@@ -162,7 +185,7 @@ export function AssistantScreen() {
 
   function startNewChat() {
     resetToNewChat();
-    showAlert('New chat started', 'Earlier chats are in History.', 'success');
+    showAlert(t('chat.newChatStarted'), t('chat.earlierChats'), 'success');
   }
 
   function onChatDeleted(id: string) {
@@ -186,7 +209,7 @@ export function AssistantScreen() {
       // chat is created first.
       const id = conversationId ?? (await aiApi.startNewConversation());
       setConversationId(id);
-      const response = await aiApi.askAssistant(question, id);
+      const response = await aiApi.askAssistant(question, id, language);
       setConversationId(response.conversationId);
       if (response.usage) setUsage(response.usage);
       setMessages((prev) => [
@@ -212,7 +235,7 @@ export function AssistantScreen() {
           {
             id: `local-${Date.now()}-e`,
             role: 'assistant',
-            text: `Sorry, I couldn't answer that. ${describeApiError(error)}`,
+            text: describeChatError(error, t),
             createdAt: new Date(),
             failed: true,
           },
@@ -232,26 +255,29 @@ export function AssistantScreen() {
       <View style={styles.topBar}>
         <View style={styles.topBarInner}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Assistant</Text>
-            <Text style={styles.disclaimerText}>General wellness guidance, not medical advice.</Text>
+            <Text style={styles.title}>{t('chat.title')}</Text>
+            <Text style={[styles.disclaimerText, scriptAwareStyle(t('chat.disclaimer'), styles.disclaimerText)]}>
+              {t('chat.disclaimer')}
+            </Text>
           </View>
           <Pressable
             onPress={() => setHistoryOpen(true)}
             style={({ pressed }) => [styles.topButton, pressed && styles.pressed]}
-            accessibilityLabel="Chat history"
+            accessibilityLabel={t('chat.historyA11y')}
           >
             <MaterialCommunityIcons name="history" size={20} color={colors.primary} />
-            <Text style={styles.topButtonText}>History</Text>
+            <Text style={styles.topButtonText} numberOfLines={1}>{t('chat.history')}</Text>
           </Pressable>
           <Pressable
             onPress={startNewChat}
             style={({ pressed }) => [styles.topButton, pressed && styles.pressed]}
-            accessibilityLabel="Start a new chat"
+            accessibilityLabel={t('chat.newChatA11y')}
           >
             <MaterialCommunityIcons name="chat-plus-outline" size={20} color={colors.primary} />
-            <Text style={styles.topButtonText}>New</Text>
+            <Text style={styles.topButtonText} numberOfLines={1}>{t('chat.newChat')}</Text>
           </Pressable>
         </View>
+        <LanguageSelector value={language} onChange={setLanguage} t={t} />
       </View>
 
       {/* Android is edge-to-edge, so the window no longer resizes for the
@@ -297,12 +323,24 @@ export function AssistantScreen() {
                         ]}
                       >
                         {isUser ? (
-                          <Text style={styles.bubbleTextUser}>{message.text}</Text>
+                          <Text style={[styles.bubbleTextUser, scriptAwareStyle(message.text, styles.bubbleTextUser)]}>
+                            {message.text}
+                          </Text>
                         ) : (
                           <>
-                            <ChatMarkdown text={message.text} style={styles.bubbleTextAssistant} />
+                            <ChatMarkdown
+                              text={message.id === WELCOME_ID ? t('chat.welcome') : message.text}
+                              style={styles.bubbleTextAssistant}
+                            />
                             {message.insufficientEvidence && (
-                              <Text style={styles.time}>Limited supporting evidence</Text>
+                              <Text style={[styles.time, scriptAwareStyle(t('chat.limitedEvidence'), styles.time)]}>
+                                {t('chat.limitedEvidence')}
+                              </Text>
+                            )}
+                            {!!message.references?.some((source) => source.url.startsWith('https://')) && (
+                              <Text style={[styles.sourcesLabel, scriptAwareStyle(t('chat.sources'), styles.sourcesLabel)]}>
+                                {t('chat.sources')}
+                              </Text>
                             )}
                             {message.references?.filter((source) => source.url.startsWith('https://')).map((source) => (
                               <Text
@@ -310,7 +348,7 @@ export function AssistantScreen() {
                                 accessibilityRole="link"
                                 style={styles.sourceLink}
                                 onPress={() => {
-                                  void Linking.openURL(source.url).catch(() => showAlert('Unable to open this source'));
+                                  void Linking.openURL(source.url).catch(() => showAlert(t('chat.sourceError')));
                                 }}
                               >
                                 {source.title}
@@ -333,23 +371,28 @@ export function AssistantScreen() {
                 </View>
                 <View style={[styles.bubble, styles.bubbleAssistant, styles.thinking]}>
                   <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={styles.thinkingText}>Thinking...</Text>
+                  <Text style={[styles.thinkingText, scriptAwareStyle(t('chat.thinking'), styles.thinkingText)]}>
+                    {t('chat.thinking')}
+                  </Text>
                 </View>
               </View>
             )}
 
             {!hasQuestions && !thinking && (
               <View style={styles.quickPrompts}>
-                {QUICK_PROMPTS.map((prompt) => (
-                  <Pressable
-                    key={prompt.label}
-                    style={({ pressed }) => [styles.promptChip, pressed && styles.pressed]}
-                    onPress={() => sendMessage(prompt.label)}
-                  >
-                    <MaterialCommunityIcons name={prompt.icon} size={14} color={colors.secondary} />
-                    <Text style={styles.promptChipText}>{prompt.label}</Text>
-                  </Pressable>
-                ))}
+                {QUICK_PROMPTS.map((prompt) => {
+                  const label = t(`chat.prompts.${prompt.key}`);
+                  return (
+                    <Pressable
+                      key={prompt.key}
+                      style={({ pressed }) => [styles.promptChip, pressed && styles.pressed]}
+                      onPress={() => sendMessage(label)}
+                    >
+                      <MaterialCommunityIcons name={prompt.icon} size={14} color={colors.secondary} />
+                      <Text style={[styles.promptChipText, scriptAwareStyle(label, styles.promptChipText)]}>{label}</Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             )}
           </ScrollView>
@@ -360,26 +403,29 @@ export function AssistantScreen() {
             <Card style={styles.lockedCard}>
               <MaterialCommunityIcons name="timer-sand" size={22} color={colors.amberCaution} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.lockedTitle}>Assistant limit reached</Text>
-                <Text style={styles.lockedText}>
+                <Text style={styles.lockedTitle}>{t('chat.locked.title')}</Text>
+                <Text style={[styles.lockedText, scriptAwareStyle(t('chat.locked.history'), styles.lockedText)]}>
                   {resetsAt
-                    ? `You can chat again at ${timeOf(resetsAt)} (in ${describeWait(resetsAt.getTime() - now)}).`
-                    : 'You can chat again soon.'}{' '}
-                  Your earlier chats are still in History.
+                    ? t('chat.locked.at', { time: timeOf(resetsAt), wait: describeWait(resetsAt.getTime() - now, t) })
+                    : t('chat.locked.soon')}{' '}
+                  {t('chat.locked.history')}
                 </Text>
               </View>
             </Card>
           ) : (
           <>
           {nearLimit && usage && (
-            <Text style={styles.nearLimit}>
-              {`You've used ${Math.min(99, Math.round((usage.tokensUsed / usage.tokenLimit) * 100))}% of your assistant allowance for the last ${usage.windowHours} hours.`}
+            <Text style={[styles.nearLimit, scriptAwareStyle(t('chat.disclaimer'), styles.nearLimit)]}>
+              {t('chat.nearLimit', {
+                percent: Math.min(99, Math.round((usage.tokensUsed / usage.tokenLimit) * 100)),
+                hours: usage.windowHours,
+              })}
             </Text>
           )}
           <Card style={styles.inputBar}>
             <TextInput
-              style={styles.input}
-              placeholder="Ask NutriPath anything..."
+              style={[styles.input, scriptAwareStyle(input || t('chat.placeholder'), styles.input)]}
+              placeholder={t('chat.placeholder')}
               placeholderTextColor={colors.outline}
               value={input}
               onChangeText={setInput}
@@ -391,7 +437,7 @@ export function AssistantScreen() {
               style={[styles.sendButton, (!input.trim() || thinking) && { opacity: 0.4 }]}
               onPress={() => sendMessage(input)}
               disabled={!input.trim() || thinking}
-              accessibilityLabel="Send"
+              accessibilityLabel={t('chat.send')}
             >
               <MaterialCommunityIcons name="arrow-up" size={18} color={colors.onPrimary} />
             </Pressable>
@@ -412,11 +458,69 @@ export function AssistantScreen() {
   );
 }
 
+/** Automatic / English / தமிழ் / සිංහල. Each option is labelled in its own language. */
+function LanguageSelector({ value, onChange, t }: { value: ChatLanguage; onChange: (l: ChatLanguage) => void; t: TFunction }) {
+  return (
+    <View style={styles.languageRow} accessibilityRole="radiogroup" accessibilityLabel={t('chat.language.label')}>
+      <MaterialCommunityIcons name="translate" size={16} color={colors.secondary} />
+      {CHAT_LANGUAGES.map((code) => {
+        const name = t(`chat.language.${code}`);
+        const selected = code === value;
+        return (
+          <Pressable
+            key={code}
+            onPress={() => onChange(code)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            accessibilityLabel={t('chat.language.a11y', { name })}
+            testID={`chat-language-${code}`}
+            style={({ pressed }) => [styles.languageChip, selected && styles.languageChipSelected, pressed && styles.pressed]}
+          >
+            <Text
+              style={[
+                styles.languageChipText,
+                selected && styles.languageChipTextSelected,
+                scriptAwareStyle(name, styles.languageChipText),
+              ]}
+              numberOfLines={1}
+            >
+              {name}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 // Phone-width content on a wide browser window.
 const MAX_WIDTH = 720;
 
 const styles = StyleSheet.create({
   sourceLink: { color: colors.primary, textDecorationLine: 'underline', marginTop: spacing.xs },
+  sourcesLabel: { ...typography.labelSm, color: colors.onSurfaceVariant, marginTop: spacing.xs },
+  languageRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.xs,
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+  },
+  languageChip: {
+    paddingHorizontal: 10,
+    minHeight: 32,
+    justifyContent: 'center',
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.surfaceContainer,
+    backgroundColor: colors.surfaceContainerLowest,
+  },
+  languageChipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  languageChipText: { ...typography.labelMd, color: colors.onSurface },
+  languageChipTextSelected: { color: colors.onPrimary },
   screen: { flex: 1, backgroundColor: colors.surface },
   topBar: {
     paddingHorizontal: spacing.margin,
