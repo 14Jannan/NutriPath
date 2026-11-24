@@ -39,8 +39,22 @@ public class AiController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
-    public async Task<IActionResult> Chat([FromBody] ChatRequest request, [FromServices] ChatRequestGate gate)
+    public async Task<IActionResult> Chat([FromBody] ChatRequest request, [FromServices] ChatRequestGate gate,
+        [FromServices] Data.NutriPathDbContext db, [FromServices] Microsoft.Extensions.Options.IOptionsSnapshot<Models.AiSettings> ai)
     {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        // Failed requests are counted for the admin dashboard (no question text is stored).
+        async Task RecordFailureAsync(Data.NutriPathDbContext context, string outcome, int? status)
+        {
+            context.ChangeTracker.Clear();
+            context.AiRequestMetrics.Add(new Models.Admin.AiRequestMetric
+            {
+                UserId = CurrentUserId, Provider = ai.Value.Provider, Model = "", Outcome = outcome, HttpStatus = status,
+                LatencyMs = (int)System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+            });
+            try { await context.SaveChangesAsync(); } catch (Microsoft.EntityFrameworkCore.DbUpdateException) { }
+        }
+
         if (string.IsNullOrWhiteSpace(request.Question))
             return BadRequest(new { message = "A question is required." });
         if (request.Question.Length > 2000)
@@ -77,11 +91,14 @@ public class AiController : ControllerBase
         }
         catch (Services.Llm.LlmProviderNotPermittedException)
         {
+            await RecordFailureAsync(db, "NotPermitted", null);
             return StatusCode(StatusCodes.Status503ServiceUnavailable,
                 new { message = "The assistant isn't available for your account right now.", code = "provider_not_permitted" });
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
+            await RecordFailureAsync(db, ex is Services.Llm.LlmRateLimitedException ? "RateLimited" : "ProviderError",
+                ex is HttpRequestException { StatusCode: { } code } ? (int)code : null);
             if (ex is Services.Llm.LlmRateLimitedException { RetryAfter: { } wait } && wait > TimeSpan.Zero)
                 Response.Headers.RetryAfter = ((int)Math.Ceiling(Math.Min(wait.TotalSeconds, 3600))).ToString(
                     System.Globalization.CultureInfo.InvariantCulture);

@@ -23,5 +23,9 @@ public sealed class KnowledgeDocument
     [System.ComponentModel.DataAnnotations.MaxLength(500)]
     public string? RejectionReason { get; set; }
     public DateTime? UpdatedAtUtc { get; set; }
+    // Set on a draft created by editing an approved document. When the draft is approved the
+    // superseded version is archived (kept, so earlier answers' citations stay valid).
+    public Guid? SupersedesDocumentId { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public List<KnowledgeChunk> Chunks { get; set; } = [];
 }

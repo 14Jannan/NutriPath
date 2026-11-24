@@ -60,6 +60,13 @@ namespace NutriPath.Api.Migrations
                 maxLength: 300,
                 nullable: true);
 
+            migrationBuilder.AddColumn<DateTime>(
+                name: "CreatedAtUtc",
+                table: "KnowledgeDocuments",
+                type: "timestamp with time zone",
+                nullable: false,
+                defaultValue: new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
+
             migrationBuilder.AddColumn<Guid>(
                 name: "CreatedByUserId",
                 table: "KnowledgeDocuments",
@@ -87,6 +94,12 @@ namespace NutriPath.Api.Migrations
                 nullable: false,
                 defaultValue: "");
 
+            migrationBuilder.AddColumn<Guid>(
+                name: "SupersedesDocumentId",
+                table: "KnowledgeDocuments",
+                type: "uuid",
+                nullable: true);
+
             migrationBuilder.AddColumn<DateTime>(
                 name: "UpdatedAtUtc",
                 table: "KnowledgeDocuments",
@@ -99,6 +112,41 @@ namespace NutriPath.Api.Migrations
                 type: "integer",
                 nullable: false,
                 defaultValue: 0);
+
+            migrationBuilder.AddColumn<string>(
+                name: "Category",
+                table: "Foods",
+                type: "character varying(60)",
+                maxLength: 60,
+                nullable: true);
+
+            migrationBuilder.AddColumn<bool>(
+                name: "IsArchived",
+                table: "Foods",
+                type: "boolean",
+                nullable: false,
+                defaultValue: false);
+
+            migrationBuilder.AddColumn<bool>(
+                name: "IsVerified",
+                table: "Foods",
+                type: "boolean",
+                nullable: false,
+                defaultValue: false);
+
+            migrationBuilder.AddColumn<string>(
+                name: "NameSinhala",
+                table: "Foods",
+                type: "character varying(200)",
+                maxLength: 200,
+                nullable: true);
+
+            migrationBuilder.AddColumn<string>(
+                name: "NameTamil",
+                table: "Foods",
+                type: "character varying(200)",
+                maxLength: 200,
+                nullable: true);
 
             migrationBuilder.CreateTable(
                 name: "AdminAuditLogs",
@@ -221,6 +269,8 @@ namespace NutriPath.Api.Migrations
                     Model = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: false),
                     Language = table.Column<string>(type: "character varying(8)", maxLength: 8, nullable: false),
                     TotalTokens = table.Column<int>(type: "integer", nullable: false),
+                    InputTokens = table.Column<int>(type: "integer", nullable: true),
+                    OutputTokens = table.Column<int>(type: "integer", nullable: true),
                     LatencyMs = table.Column<int>(type: "integer", nullable: false),
                     RetrievalMs = table.Column<int>(type: "integer", nullable: false),
                     Outcome = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
@@ -436,7 +486,7 @@ namespace NutriPath.Api.Migrations
                 unique: true);
 
             // Existing documents: Approved stays the source of truth for retrieval; mirror it in Status.
-            migrationBuilder.Sql("""UPDATE "KnowledgeDocuments" SET "Status" = CASE WHEN "Approved" THEN 'Approved' ELSE 'Draft' END;""");
+            migrationBuilder.Sql("""UPDATE "KnowledgeDocuments" SET "Status" = CASE WHEN "Approved" THEN 'Approved' ELSE 'Draft' END, "CreatedAtUtc" = COALESCE("ReviewedAtUtc", now());""");
             // Existing users get a random security stamp (tokens issued before this carry none and expire normally).
             migrationBuilder.Sql("""UPDATE "Users" SET "SecurityStamp" = md5(random()::text || "Id"::text) WHERE "SecurityStamp" = '';""");
         }
@@ -513,6 +563,10 @@ namespace NutriPath.Api.Migrations
                 table: "Users");
 
             migrationBuilder.DropColumn(
+                name: "CreatedAtUtc",
+                table: "KnowledgeDocuments");
+
+            migrationBuilder.DropColumn(
                 name: "CreatedByUserId",
                 table: "KnowledgeDocuments");
 
@@ -529,12 +583,36 @@ namespace NutriPath.Api.Migrations
                 table: "KnowledgeDocuments");
 
             migrationBuilder.DropColumn(
+                name: "SupersedesDocumentId",
+                table: "KnowledgeDocuments");
+
+            migrationBuilder.DropColumn(
                 name: "UpdatedAtUtc",
                 table: "KnowledgeDocuments");
 
             migrationBuilder.DropColumn(
                 name: "Version",
                 table: "KnowledgeDocuments");
+
+            migrationBuilder.DropColumn(
+                name: "Category",
+                table: "Foods");
+
+            migrationBuilder.DropColumn(
+                name: "IsArchived",
+                table: "Foods");
+
+            migrationBuilder.DropColumn(
+                name: "IsVerified",
+                table: "Foods");
+
+            migrationBuilder.DropColumn(
+                name: "NameSinhala",
+                table: "Foods");
+
+            migrationBuilder.DropColumn(
+                name: "NameTamil",
+                table: "Foods");
         }
     }
 }

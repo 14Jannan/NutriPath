@@ -10,15 +10,16 @@ public class GroqClient : IGroqClient
     private readonly HttpClient _httpClient;
     private readonly GroqSettings _settings;
     private readonly ILogger<GroqClient> _logger;
+    private readonly Admin.IProviderCredentialStore? _credentials;
 
-    public GroqClient(HttpClient httpClient, IOptions<GroqSettings> settings, ILogger<GroqClient> logger)
+    public GroqClient(HttpClient httpClient, IOptions<GroqSettings> settings, ILogger<GroqClient> logger,
+        Admin.IProviderCredentialStore? credentials = null)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
         _logger = logger;
+        _credentials = credentials;
         _httpClient.BaseAddress = new Uri(_settings.BaseUrl);
-        _httpClient.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
     }
 
     public Task<GroqReply> AskAsync(string systemPrompt, string userMessage, IReadOnlyList<GroqMessage>? history = null) =>
@@ -40,9 +41,16 @@ public class GroqClient : IGroqClient
             ResponseFormat = json ? new GroqResponseFormat("json_object") : null,
         };
 
+        // The key is resolved per request, so a key replaced in the admin portal applies at once.
+        var apiKey = _credentials is null
+            ? _settings.ApiKey
+            : await _credentials.GetActiveCredentialAsync(Admin.ExternalProviders.Groq, CancellationToken.None);
+
         // Relative path, no leading slash — a leading "/" would replace
         // BaseAddress's "/openai/v1/" path instead of appending to it.
-        using var response = await _httpClient.PostAsJsonAsync("chat/completions", request);
+        using var message = new HttpRequestMessage(HttpMethod.Post, "chat/completions") { Content = JsonContent.Create(request) };
+        message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey ?? "");
+        using var response = await _httpClient.SendAsync(message);
         if (!response.IsSuccessStatusCode)
             _logger.LogWarning("Groq chat completion returned HTTP {StatusCode}.", (int)response.StatusCode);
 
@@ -58,6 +66,6 @@ public class GroqClient : IGroqClient
         // limit still applies.
         var tokens = result?.Usage?.TotalTokens
             ?? (messages.Sum(m => m.Content.Length) + text.Length) / 4;
-        return new GroqReply(text, tokens);
+        return new GroqReply(text, tokens, result?.Usage?.PromptTokens, result?.Usage?.CompletionTokens);
     }
 }

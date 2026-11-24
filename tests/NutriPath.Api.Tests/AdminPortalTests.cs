@@ -26,6 +26,23 @@ internal sealed class AdminHarness : IAsyncDisposable
         {
             base.ConfigureWebHost(builder);
             builder.UseSetting("RateLimits:AuthPermitPerMinute", "1000");
+            builder.UseSetting("Groq:ApiKey", "env-groq-key-0001");
+            Microsoft.AspNetCore.TestHost.WebHostBuilderExtensions.ConfigureTestServices(builder, services =>
+                services.AddSingleton<IProviderConnectionTester>(new FakeConnectionTester()));
+        }
+    }
+
+    /// <summary>Keys starting "good-" work; "rate-" is rate limited; anything else is rejected. No network.</summary>
+    public sealed class FakeConnectionTester : IProviderConnectionTester
+    {
+        public List<(string Provider, string Key)> Calls { get; } = [];
+
+        public Task<CredentialTestResult> TestAsync(string provider, string apiKey, CancellationToken cancellationToken)
+        {
+            lock (Calls) Calls.Add((provider, apiKey));
+            return Task.FromResult(apiKey.StartsWith("good-") ? new CredentialTestResult(true, "Healthy", 200)
+                : apiKey.StartsWith("rate-") ? new CredentialTestResult(false, "RateLimited", 429)
+                : new CredentialTestResult(false, "InvalidCredential", 401));
         }
     }
 

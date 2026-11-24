@@ -35,12 +35,15 @@ public class UsdaFoodSyncService : IUsdaFoodSyncService
     private readonly HttpClient _httpClient;
     private readonly NutriPathDbContext _db;
     private readonly IConfiguration _config;
+    private readonly Admin.IProviderCredentialStore? _credentials;
 
-    public UsdaFoodSyncService(HttpClient httpClient, NutriPathDbContext db, IConfiguration config)
+    public UsdaFoodSyncService(HttpClient httpClient, NutriPathDbContext db, IConfiguration config,
+        Admin.IProviderCredentialStore? credentials = null)
     {
         _httpClient = httpClient;
         _db = db;
         _config = config;
+        _credentials = credentials;
     }
 
     public async Task<SyncJob> SyncAsync(string query, int pageSize)
@@ -53,7 +56,11 @@ public class UsdaFoodSyncService : IUsdaFoodSyncService
 
         try
         {
-            var apiKey = _config["Usda:ApiKey"];
+            // A key replaced in the admin portal takes precedence over deployment configuration.
+            var apiKey = _credentials is null
+                ? _config["Usda:ApiKey"]
+                : await _credentials.GetActiveCredentialAsync(Admin.ExternalProviders.Usda, CancellationToken.None);
+            apiKey = Uri.EscapeDataString(apiKey ?? "");
             var foods = new List<UsdaFoodItem>();
             var failures = new List<string>();
 
@@ -184,6 +191,11 @@ public class UsdaFoodSyncService : IUsdaFoodSyncService
             });
             await _db.SaveChangesAsync();
             return true; // inserted
+        }
+        else if (existing.IsVerified)
+        {
+            // Manually reviewed in the admin portal: never overwritten by a sync.
+            return null;
         }
         else
         {

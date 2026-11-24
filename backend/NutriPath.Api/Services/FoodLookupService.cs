@@ -55,7 +55,10 @@ public class FoodLookupService : IFoodLookupService
         // Only the first page of a short, specific-enough search that found
         // little — later pages mean the user already has plenty to scroll.
         if (page != 1 || results.Count >= MinLocalResults || query.Length < 3) return results;
-        if (string.IsNullOrWhiteSpace(_config["Usda:ApiKey"])) return results;
+        var credentials = _scopeFactory.CreateScope().ServiceProvider.GetService<Admin.IProviderCredentialStore>();
+        var usdaKey = credentials is null ? _config["Usda:ApiKey"]
+            : await credentials.GetActiveCredentialAsync(Admin.ExternalProviders.Usda, CancellationToken.None);
+        if (string.IsNullOrWhiteSpace(usdaKey)) return results;
 
         var term = query.Trim().ToLowerInvariant();
         var cacheKey = "usda-lookup:" + term;

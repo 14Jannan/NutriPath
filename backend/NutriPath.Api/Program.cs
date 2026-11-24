@@ -150,10 +150,13 @@ builder.Services.AddScoped<IAiService>(sp => new AiService(
     sp.GetRequiredService<IKnowledgeRetrievalService>(),
     sp.GetRequiredService<NutriPath.Api.Services.Llm.ILlmProviderSelector>(),
     sp.GetRequiredService<NutriPath.Api.Services.Multilingual.ILanguageResolver>(),
-    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiSettings>>(),
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<AiSettings>>(),
     sp.GetRequiredService<NutriPathDbContext>(),
-    sp.GetRequiredService<IMessageProtector>()));
-builder.Services.AddScoped<IAiUsageService, AiUsageService>();
+    sp.GetRequiredService<IMessageProtector>(),
+    sp.GetRequiredService<NutriPath.Api.Services.Admin.RuntimeSettingsStore>()));
+// Snapshot options: admin runtime settings apply on the next request without a restart.
+builder.Services.AddScoped<IAiUsageService>(sp => new AiUsageService(sp.GetRequiredService<NutriPathDbContext>(),
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<AiUsageSettings>>()));
 
 // Chat messages are encrypted at rest with this key. It lives in user
 // secrets (dev) or the Encryption__MessageKey environment variable (prod),
@@ -184,19 +187,49 @@ builder.Services.AddHttpClient<IUsdaFoodSyncService, UsdaFoodSyncService>();
 
 // Imports everyday foods on startup when the catalog is nearly empty.
 builder.Services.AddHostedService<StarterFoodCatalogSeeder>();
-builder.Services.AddHttpClient<IGroqClient, GroqClient>(client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpClient<IGroqClient, GroqClient>((HttpClient http, IServiceProvider sp) => new GroqClient(http,
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<GroqSettings>>(),
+        sp.GetRequiredService<ILogger<GroqClient>>(),
+        sp.GetRequiredService<NutriPath.Api.Services.Admin.IProviderCredentialStore>()))
+    .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(30));
 
 // Multilingual assistant: provider selection (with the Gemini free-tier privacy guard),
 // language resolution and one-request-at-a-time per user.
 builder.Services.Configure<AiSettings>(builder.Configuration.GetSection("AI"));
 builder.Services.Configure<GeminiSettings>(builder.Configuration.GetSection("Gemini"));
 builder.Services.AddSingleton<ChatRequestGate>();
-builder.Services.AddSingleton<NutriPath.Api.Services.Multilingual.ILanguageResolver,
-    NutriPath.Api.Services.Multilingual.LanguageResolver>();
+builder.Services.AddScoped<NutriPath.Api.Services.Multilingual.ILanguageResolver>(sp =>
+    new NutriPath.Api.Services.Multilingual.LanguageResolver(sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<AiSettings>>()));
 builder.Services.AddScoped<NutriPath.Api.Services.Llm.GroqLlmClient>();
 // Per-attempt timeouts and retries live in GeminiClient; this only bounds the whole call.
-builder.Services.AddHttpClient<NutriPath.Api.Services.Llm.GeminiClient>(client => client.Timeout = TimeSpan.FromSeconds(150));
-builder.Services.AddScoped<NutriPath.Api.Services.Llm.ILlmProviderSelector, NutriPath.Api.Services.Llm.LlmProviderSelector>();
+builder.Services.AddHttpClient<NutriPath.Api.Services.Llm.GeminiClient, NutriPath.Api.Services.Llm.GeminiClient>((HttpClient http, IServiceProvider sp) => new NutriPath.Api.Services.Llm.GeminiClient(http,
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<GeminiSettings>>(),
+        sp.GetRequiredService<ILogger<NutriPath.Api.Services.Llm.GeminiClient>>(),
+        sp.GetRequiredService<NutriPath.Api.Services.Admin.IProviderCredentialStore>()))
+    .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(150));
+builder.Services.AddScoped<NutriPath.Api.Services.Llm.ILlmProviderSelector>(sp => new NutriPath.Api.Services.Llm.LlmProviderSelector(
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<AiSettings>>(),
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<GeminiSettings>>(),
+    sp.GetRequiredService<NutriPathDbContext>(), sp));
+builder.Services.AddScoped<NutriPath.Api.Services.Llm.GroqLlmClient>(sp => new NutriPath.Api.Services.Llm.GroqLlmClient(
+    sp.GetRequiredService<IGroqClient>(), sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<GroqSettings>>()));
+
+// Runtime-managed provider keys and AI settings (admin portal).
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.IProviderCredentialStore, NutriPath.Api.Services.Admin.ProviderCredentialStore>();
+builder.Services.AddHttpClient<NutriPath.Api.Services.Admin.IProviderConnectionTester, NutriPath.Api.Services.Admin.ProviderConnectionTester>()
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.ProviderCredentialService>();
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.RuntimeSettingsStore>();
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.AiRuntimeOverrides>();
+builder.Services.AddSingleton<Microsoft.Extensions.Options.IPostConfigureOptions<AiSettings>>(sp => sp.GetRequiredService<NutriPath.Api.Services.Admin.AiRuntimeOverrides>());
+builder.Services.AddSingleton<Microsoft.Extensions.Options.IPostConfigureOptions<GeminiSettings>>(sp => sp.GetRequiredService<NutriPath.Api.Services.Admin.AiRuntimeOverrides>());
+builder.Services.AddSingleton<Microsoft.Extensions.Options.IPostConfigureOptions<GroqSettings>>(sp => sp.GetRequiredService<NutriPath.Api.Services.Admin.AiRuntimeOverrides>());
+builder.Services.AddSingleton<Microsoft.Extensions.Options.IPostConfigureOptions<AiUsageSettings>>(sp => sp.GetRequiredService<NutriPath.Api.Services.Admin.AiRuntimeOverrides>());
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.RuntimeSettingsService>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.KnowledgeAdminService>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.BackgroundJobs>();
+builder.Services.AddHostedService<NutriPath.Api.Services.Admin.BackgroundJobWorker>();
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.SystemHealth>();
 
 builder.Services.AddDbContext<NutriPathDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));

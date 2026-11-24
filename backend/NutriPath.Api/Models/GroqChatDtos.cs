@@ -45,10 +45,16 @@ public class GroqUsage
 {
     [JsonPropertyName("total_tokens")]
     public int TotalTokens { get; set; }
+
+    [JsonPropertyName("prompt_tokens")]
+    public int? PromptTokens { get; set; }
+
+    [JsonPropertyName("completion_tokens")]
+    public int? CompletionTokens { get; set; }
 }
 
 /// <summary>The model's answer and how many tokens (prompt + answer) it cost.</summary>
-public record GroqReply(string Text, int TotalTokens);
+public record GroqReply(string Text, int TotalTokens, int? InputTokens = null, int? OutputTokens = null);
 
 public class GroqChoice
 {

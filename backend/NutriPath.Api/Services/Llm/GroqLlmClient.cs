@@ -21,6 +21,6 @@ public sealed class GroqLlmClient(IGroqClient groq, string model) : ILlmClient
         var reply = request.JsonSchema is null
             ? await groq.AskAsync(request.SystemPrompt, request.UserMessage, history)
             : await groq.AskJsonAsync(request.SystemPrompt, request.UserMessage, history);
-        return new LlmResponse(reply.Text, reply.TotalTokens, Provider, Model);
+        return new LlmResponse(reply.Text, reply.TotalTokens, Provider, Model, reply.InputTokens, reply.OutputTokens);
     }
 }

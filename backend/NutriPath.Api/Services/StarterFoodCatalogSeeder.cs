@@ -65,7 +65,10 @@ public class StarterFoodCatalogSeeder : BackgroundService
         // Tests run the real app in memory and must never call USDA.
         if (_environment.IsEnvironment("Testing")) return;
 
-        if (string.IsNullOrWhiteSpace(_config["Usda:ApiKey"]))
+        var credentials = _scopeFactory.CreateScope().ServiceProvider.GetService<Admin.IProviderCredentialStore>();
+        var usdaKey = credentials is null ? _config["Usda:ApiKey"]
+            : await credentials.GetActiveCredentialAsync(Admin.ExternalProviders.Usda, stoppingToken);
+        if (string.IsNullOrWhiteSpace(usdaKey))
         {
             _logger.LogInformation("Starter food catalog skipped: no Usda:ApiKey configured.");
             return;

@@ -27,6 +27,7 @@ public class AiService : IAiService
     // Chat text is private, so it's encrypted before it reaches the
     // database and decrypted only when shown to its owner or sent to the AI.
     private readonly IMessageProtector _protector;
+    private readonly Admin.RuntimeSettingsStore? _runtime;
 
     public AiService(
         IAiContextBuilder contextBuilder,
@@ -35,8 +36,10 @@ public class AiService : IAiService
         ILanguageResolver languages,
         IOptions<AiSettings> settings,
         NutriPathDbContext db,
-        IMessageProtector protector)
+        IMessageProtector protector,
+        Admin.RuntimeSettingsStore? runtime = null)
     {
+        _runtime = runtime;
         _contextBuilder = contextBuilder;
         _retrieval = retrieval;
         _providers = providers;
@@ -84,6 +87,7 @@ public class AiService : IAiService
     public async Task<ChatResponse> ChatAsync(Guid userId, string question, ClientClock clock, Guid? conversationId = null,
         string? language = null, CancellationToken cancellationToken = default)
     {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         // ---- Language: explicit request > chat selection > detection > saved preference > default ----
         var profile = await _db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId, cancellationToken);
         var resolved = _languages.Resolve(question, language, profile?.PreferredLanguage);
@@ -127,8 +131,10 @@ public class AiService : IAiService
         var structuredContextJson = await _contextBuilder.BuildContextAsync(userId, question, clock);
 
         // ---- 2. SEMANTIC retrieval: relevant knowledge, similarity search ----
+        var retrievalStarted = System.Diagnostics.Stopwatch.GetTimestamp();
         await _retrieval.EnsureIndexBuiltAsync();
         var relevantChunks = await _retrieval.SearchAsync(question);
+        var retrievalMs = (int)System.Diagnostics.Stopwatch.GetElapsedTime(retrievalStarted).TotalMilliseconds;
 
         // ---- 3. Build the grounded prompt (shared with the evaluation CLI) ----
         var systemPrompt = AiPrompt.System(resolved.Code, _settings.Multilingual.Enabled);
@@ -176,6 +182,17 @@ public class AiService : IAiService
         });
 
         _db.AiUsageRecords.Add(new AiUsageRecord { UserId = userId, Tokens = reply.TotalTokens });
+        // Operational metadata for the admin portal; no prompt or answer text.
+        _db.AiRequestMetrics.Add(new Models.Admin.AiRequestMetric
+        {
+            UserId = userId, Provider = reply.Provider, Model = reply.Model.Length > 60 ? reply.Model[..60] : reply.Model,
+            Language = resolved.Code, TotalTokens = reply.TotalTokens, InputTokens = reply.InputTokens, OutputTokens = reply.OutputTokens,
+            LatencyMs = (int)System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds, RetrievalMs = retrievalMs,
+            Outcome = "Success", ValidationPassed = grounded.Answer != GroundedNutritionAnswer.Unverified(resolved.Code) &&
+                grounded.Answer != GroundedNutritionAnswer.UnverifiedAllergySafety(resolved.Code),
+            Citations = grounded.References.Count, InsufficientEvidence = grounded.InsufficientEvidence,
+            ConfigVersion = _runtime?.Ai.Version ?? 0,
+        });
 
         await _db.SaveChangesAsync(cancellationToken);
 

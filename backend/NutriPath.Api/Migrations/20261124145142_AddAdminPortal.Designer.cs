@@ -13,7 +13,7 @@ using NutriPath.Api.Data;
 namespace NutriPath.Api.Migrations
 {
     [DbContext(typeof(NutriPathDbContext))]
-    [Migration("20261124143030_AddAdminPortal")]
+    [Migration("20261124145142_AddAdminPortal")]
     partial class AddAdminPortal
     {
         /// <inheritdoc />
@@ -250,6 +250,9 @@ namespace NutriPath.Api.Migrations
                     b.Property<int?>("HttpStatus")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("InputTokens")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("InsufficientEvidence")
                         .HasColumnType("boolean");
 
@@ -270,6 +273,9 @@ namespace NutriPath.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<int?>("OutputTokens")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Provider")
                         .IsRequired()
@@ -637,6 +643,10 @@ namespace NutriPath.Api.Migrations
                     b.Property<decimal>("CarbsGrams")
                         .HasColumnType("numeric");
 
+                    b.Property<string>("Category")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uuid");
 
@@ -656,12 +666,26 @@ namespace NutriPath.Api.Migrations
                     b.Property<DateTime>("ImportedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsVerified")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("LastUpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("NameSinhala")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("NameTamil")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<decimal>("ProteinGrams")
                         .HasColumnType("numeric");
@@ -735,6 +759,9 @@ namespace NutriPath.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uuid");
 
@@ -767,6 +794,9 @@ namespace NutriPath.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("SupersedesDocumentId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Title")
                         .IsRequired()

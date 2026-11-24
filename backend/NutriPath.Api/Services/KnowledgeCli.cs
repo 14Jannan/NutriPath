@@ -264,7 +264,7 @@ public sealed partial class KnowledgeCli(NutriPathDbContext db, IEmbeddingServic
         Console.WriteLine(document.Id);
     }
 
-    private async Task IndexAsync(KnowledgeDocument document)
+    public async Task IndexAsync(KnowledgeDocument document)
     {
         foreach (var batch in document.Chunks.Chunk(16))
         {
@@ -286,7 +286,7 @@ public sealed partial class KnowledgeCli(NutriPathDbContext db, IEmbeddingServic
         return Validate(input, content);
     }
 
-    private static KnowledgeDocument Validate(ImportDocument? input, string? content)
+    public static KnowledgeDocument Validate(ImportDocument? input, string? content)
     {
         if (input is null || input.Language != "en" ||
             !ValidMetadata(input.Title) || !ValidMetadata(input.Category) || !ValidMetadata(input.Organization) ||
@@ -312,7 +312,7 @@ public sealed partial class KnowledgeCli(NutriPathDbContext db, IEmbeddingServic
     private static bool ValidMetadata(string? value) =>
         !string.IsNullOrWhiteSpace(value) && value.Length <= 200 && !value.Any(char.IsControl);
 
-    private static async Task<string> ReadBoundedAsync(string path)
+    public static async Task<string> ReadBoundedAsync(string path)
     {
         await using var stream = File.OpenRead(path);
         var buffer = new byte[MaximumBytes + 1];
@@ -358,7 +358,7 @@ public sealed partial class KnowledgeCli(NutriPathDbContext db, IEmbeddingServic
         return result;
     }
 
-    private sealed record ImportDocument(string? Title, string? Category, string? Organization,
+    public sealed record ImportDocument(string? Title, string? Category, string? Organization,
         string? SourceUrl, string? Language, DateOnly? PublicationDate, string? Content);
     private sealed record EvaluationQuestion(string Question, string[] ExpectedTitles, string[] LegacyTitles);
 }

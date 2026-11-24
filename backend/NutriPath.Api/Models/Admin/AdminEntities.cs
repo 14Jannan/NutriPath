@@ -133,6 +133,8 @@ public sealed class AiRequestMetric
     [MaxLength(60)] public string Model { get; set; } = "";
     [MaxLength(8)] public string Language { get; set; } = "en";
     public int TotalTokens { get; set; }
+    public int? InputTokens { get; set; }
+    public int? OutputTokens { get; set; }
     public int LatencyMs { get; set; }
     public int RetrievalMs { get; set; }
     // Success, ProviderError, RateLimited, NotPermitted

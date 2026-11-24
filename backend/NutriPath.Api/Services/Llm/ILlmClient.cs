@@ -14,7 +14,8 @@ public sealed record LlmRequest(
     object? JsonSchema = null);
 
 /// <summary>The model's text and the tokens it cost (prompt + output, including thinking).</summary>
-public sealed record LlmResponse(string Text, int TotalTokens, string Provider, string Model);
+public sealed record LlmResponse(string Text, int TotalTokens, string Provider, string Model,
+    int? InputTokens = null, int? OutputTokens = null);
 
 /// <summary>A chat-completion provider (Gemini, Groq).</summary>
 public interface ILlmClient

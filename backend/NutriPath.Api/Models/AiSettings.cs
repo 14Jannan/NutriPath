@@ -20,6 +20,9 @@ public sealed class AiSettings
     /// </summary>
     public string? UnapprovedUserProvider { get; set; }
 
+    /// <summary>Providers switched off in the admin portal. Requests that would use them are refused.</summary>
+    public string[] DisabledProviders { get; set; } = [];
+
     public MultilingualSettings Multilingual { get; set; } = new();
 }
 
