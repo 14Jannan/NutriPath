@@ -98,4 +98,30 @@ describe('AuthContext profile gate', () => {
 
     expect(result.current.profileStatus).toBe('complete');
   });
+
+  it('marks an administrator account from the login response', async () => {
+    auth.login.mockImplementation(async () => ({ fullName: 'Admin', isAdmin: true }) as never);
+    api.getMyProfile.mockResolvedValue({ fullName: 'Admin', targetCalories: 0, isAdmin: true } as never);
+    const { result } = await renderHook(() => useAuth(), { wrapper });
+
+    await act(() => result.current.loginUser('admin@b.com', 'pw'));
+
+    expect(result.current.isAdmin).toBe(true);
+  });
+
+  it('marks an administrator when a saved session is restored', async () => {
+    mockTokens.set('nutripath.accessToken', 'saved');
+    api.getMyProfile.mockResolvedValue({ fullName: 'Admin', targetCalories: 0, isAdmin: true } as never);
+
+    const { result } = await renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => expect(result.current.isAdmin).toBe(true));
+  });
+
+  it('does not treat a regular user as an administrator', async () => {
+    api.getMyProfile.mockResolvedValue(profile(2000));
+    const { result } = await renderHook(() => useAuth(), { wrapper });
+    await act(() => result.current.loginUser('a@b.com', 'pw'));
+    expect(result.current.isAdmin).toBe(false);
+  });
 });

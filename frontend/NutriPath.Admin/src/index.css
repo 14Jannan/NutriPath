@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+/* Dark mode follows the .dark class set by the theme provider (light / dark / system). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Tamil", "Noto Sans Sinhala", sans-serif;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-soft: var(--primary-soft);
+  --color-teal: var(--teal);
+  --color-teal-soft: var(--teal-soft);
+  --color-lime: var(--lime);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --shadow-card: 0 1px 2px rgb(15 31 25 / 0.04), 0 4px 16px -6px rgb(15 31 25 / 0.08);
+  --radius-xl: 0.9rem;
+}
+
+:root {
+  /* NutriPath brand: emerald primary, teal secondary, lime accent, slate neutrals. */
+  --bg: #f5f7f5;
+  --surface: #ffffff;
+  --surface-2: #eef4f0;
+  --fg: #0f1f19;
+  --muted: #5b6b66;
+  --border: #dfe7e2;
+  --ring: #10b981;
+  --primary: #047857;
+  --primary-fg: #ffffff;
+  --primary-soft: #d1fae5;
+  --teal: #0f766e;
+  --teal-soft: #ccfbf1;
+  --lime: #65a30d;
+  --danger: #b91c1c;
+  --danger-soft: #fee2e2;
+  --warning: #b45309;
+  --warning-soft: #fef3c7;
+  --info: #1d4ed8;
+  --info-soft: #dbeafe;
+  --chart-1: #059669;
+  --chart-2: #0d9488;
+  --chart-3: #65a30d;
+  --chart-4: #2563eb;
+  --chart-5: #d97706;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #0a100e;
+  --surface: #111916;
+  --surface-2: #17221e;
+  --fg: #e7efea;
+  --muted: #94a3a0;
+  --border: #22302b;
+  --ring: #34d399;
+  --primary: #34d399;
+  --primary-fg: #052e22;
+  --primary-soft: #0f3a2d;
+  --teal: #2dd4bf;
+  --teal-soft: #0f3532;
+  --lime: #a3e635;
+  --danger: #f87171;
+  --danger-soft: #3b1616;
+  --warning: #fbbf24;
+  --warning-soft: #3a2a0c;
+  --info: #60a5fa;
+  --info-soft: #14233f;
+  --chart-1: #34d399;
+  --chart-2: #2dd4bf;
+  --chart-3: #a3e635;
+  --chart-4: #60a5fa;
+  --chart-5: #fbbf24;
+  color-scheme: dark;
+}
+
+html, body, #root { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tamil and Sinhala need taller lines so stacked vowel signs are not clipped. */
+:lang(ta), :lang(si), .script-tall { line-height: 1.7; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-fade-up { animation: fade-up 0.35s ease-out both; }

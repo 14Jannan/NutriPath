@@ -94,3 +94,33 @@ jobs:
 
       - name: Test
         run: npm test -- --ci
+
+  admin:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/NutriPath.Admin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/NutriPath.Admin/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npx vite build

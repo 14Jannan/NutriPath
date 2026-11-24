@@ -17,6 +17,8 @@ export interface AuthResponse {
   userId: string;
   email: string;
   fullName: string;
+  // Administrator accounts manage NutriPath from the web admin portal.
+  isAdmin?: boolean;
 }
 
 export const apiClient = axios.create({

@@ -10,6 +10,7 @@ import { VerifyOtpScreen } from '@/screens/VerifyOtpScreen';
 import { ForgotPasswordScreen } from '@/screens/ForgotPasswordScreen';
 import { MainTabNavigator, MainTabParamList } from '@/navigation/MainTabNavigator';
 import { OnboardingScreen } from '@/screens/OnboardingScreen';
+import { AdminAccessScreen } from '@/screens/AdminAccessScreen';
 import { Button } from '@/components/Button';
 import { useAuth } from '@/context/AuthContext';
 import { colors, spacing, typography } from '@/theme';
@@ -42,7 +43,7 @@ function ProfileCheckFailed() {
 }
 
 export function RootNavigator() {
-  const { isLoggedIn, isLoading, loginRequired, profileStatus } = useAuth();
+  const { isLoggedIn, isLoading, loginRequired, profileStatus, isAdmin } = useAuth();
 
   if (isLoading || (isLoggedIn && profileStatus === 'checking')) {
     // Brief moment while we check for a saved session and, once logged
@@ -52,6 +53,12 @@ export function RootNavigator() {
         <ActivityIndicator color={colors.primary} size="large" /> 
       </View>
     );
+  }
+
+  // Rendered outside the navigator on purpose: with no consumer screens
+  // mounted, no deep link or notification can open them for an admin.
+  if (isLoggedIn && isAdmin) {
+    return <AdminAccessScreen />;
   }
 
   if (isLoggedIn && profileStatus === 'error') {
