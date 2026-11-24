@@ -27,6 +27,20 @@ public class NutriPathDbContext : DbContext
     public DbSet<AiMessage> AiMessages => Set<AiMessage>();
     public DbSet<AiUsageRecord> AiUsageRecords => Set<AiUsageRecord>();
 
+    // Admin portal
+    public DbSet<Models.Admin.UserRole> UserRoles => Set<Models.Admin.UserRole>();
+    public DbSet<Models.Admin.AdminSession> AdminSessions => Set<Models.Admin.AdminSession>();
+    public DbSet<Models.Admin.AdminMfa> AdminMfa => Set<Models.Admin.AdminMfa>();
+    public DbSet<Models.Admin.AdminRecoveryCode> AdminRecoveryCodes => Set<Models.Admin.AdminRecoveryCode>();
+    public DbSet<Models.Admin.AdminInvitation> AdminInvitations => Set<Models.Admin.AdminInvitation>();
+    public DbSet<Models.Admin.AdminAuditLog> AdminAuditLogs => Set<Models.Admin.AdminAuditLog>();
+    public DbSet<Models.Admin.ProviderCredential> ProviderCredentials => Set<Models.Admin.ProviderCredential>();
+    public DbSet<Models.Admin.RuntimeSetting> RuntimeSettings => Set<Models.Admin.RuntimeSetting>();
+    public DbSet<Models.Admin.RuntimeSettingVersion> RuntimeSettingVersions => Set<Models.Admin.RuntimeSettingVersion>();
+    public DbSet<Models.Admin.AiRequestMetric> AiRequestMetrics => Set<Models.Admin.AiRequestMetric>();
+    public DbSet<Models.Admin.UserAiLimit> UserAiLimits => Set<Models.Admin.UserAiLimit>();
+    public DbSet<Models.Admin.BackgroundJob> BackgroundJobs => Set<Models.Admin.BackgroundJob>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<KnowledgeDocument>().HasIndex(d => d.ContentHash).IsUnique();
@@ -80,6 +94,48 @@ public class NutriPathDbContext : DbContext
             .HasMany(m => m.Items)
             .WithOne(mi => mi.Meal)
             .HasForeignKey(mi => mi.MealId);
+
+        ConfigureAdmin(modelBuilder);
+    }
+
+    private static void ConfigureAdmin(ModelBuilder b)
+    {
+        b.Entity<User>().Property(u => u.SecurityStamp).IsConcurrencyToken();
+        b.Entity<KnowledgeDocument>().HasIndex(d => d.Status);
+
+        b.Entity<Models.Admin.UserRole>().HasKey(r => new { r.UserId, r.Role });
+        b.Entity<Models.Admin.UserRole>().HasOne<User>().WithMany().HasForeignKey(r => r.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        b.Entity<Models.Admin.AdminSession>().HasIndex(s => s.RefreshTokenHash).IsUnique();
+        b.Entity<Models.Admin.AdminSession>().HasIndex(s => s.UserId);
+        b.Entity<Models.Admin.AdminSession>().Property(s => s.RefreshTokenHash).IsConcurrencyToken();
+        b.Entity<Models.Admin.AdminSession>().HasOne<User>().WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        b.Entity<Models.Admin.AdminMfa>().HasOne<User>().WithOne().HasForeignKey<Models.Admin.AdminMfa>(m => m.UserId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<Models.Admin.AdminMfa>().Property(m => m.LastUsedTimeStep).IsConcurrencyToken();
+        b.Entity<Models.Admin.AdminRecoveryCode>().HasIndex(c => c.UserId);
+        b.Entity<Models.Admin.AdminRecoveryCode>().HasOne<User>().WithMany().HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        b.Entity<Models.Admin.AdminInvitation>().HasIndex(i => i.TokenHash).IsUnique();
+        b.Entity<Models.Admin.AdminInvitation>().HasIndex(i => i.Email);
+
+        // Audit rows keep the actor id even if that account is later deleted.
+        b.Entity<Models.Admin.AdminAuditLog>().HasIndex(a => a.AtUtc);
+        b.Entity<Models.Admin.AdminAuditLog>().HasIndex(a => new { a.ActorUserId, a.AtUtc });
+        b.Entity<Models.Admin.AdminAuditLog>().HasIndex(a => a.Action);
+
+        b.Entity<Models.Admin.ProviderCredential>().HasIndex(c => new { c.Provider, c.Version }).IsUnique();
+        b.Entity<Models.Admin.ProviderCredential>().HasIndex(c => new { c.Provider, c.Status });
+
+        b.Entity<Models.Admin.RuntimeSetting>().Property(s => s.Version).IsConcurrencyToken();
+        b.Entity<Models.Admin.RuntimeSettingVersion>().HasIndex(v => new { v.Key, v.Version }).IsUnique();
+
+        b.Entity<Models.Admin.AiRequestMetric>().HasIndex(m => m.AtUtc);
+        b.Entity<Models.Admin.AiRequestMetric>().HasIndex(m => new { m.UserId, m.AtUtc });
+
+        b.Entity<Models.Admin.UserAiLimit>().HasOne<User>().WithOne().HasForeignKey<Models.Admin.UserAiLimit>(l => l.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        b.Entity<Models.Admin.BackgroundJob>().HasIndex(j => new { j.Status, j.CreatedAtUtc });
     }
 
 }

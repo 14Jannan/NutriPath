@@ -12,7 +12,8 @@ using NutriPath.Api.Models;
 using NutriPath.Api.Services;
 
 var knowledgeCommand = args.FirstOrDefault() == "knowledge";
-var builder = WebApplication.CreateBuilder(knowledgeCommand ? [] : args);
+var adminCommand = args.FirstOrDefault() == "admin";
+var builder = WebApplication.CreateBuilder(knowledgeCommand || adminCommand ? [] : args);
 
 // Render (and most cloud hosts) assign the port at runtime via PORT; Kestrel
 // won't pick it up on its own. Locally PORT is unset, so launchSettings.json
@@ -111,7 +112,7 @@ builder.Services.AddRateLimiter(options =>
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 5,
+                PermitLimit = builder.Configuration.GetValue("RateLimits:AuthPermitPerMinute", 5),
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0, // reject immediately, no queueing
             }));
@@ -219,9 +220,33 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(30), // small tolerance for clock drift, not the full 5-minute .NET default
         };
+        // Suspended accounts and revoked sessions stop working on the next request.
+        options.Events = NutriPath.Api.Services.Admin.SecurityState.Events(admin: false);
+    })
+    // Admin portal tokens: separate audience, issued only after MFA, never valid for the consumer API.
+    .AddJwtBearer(NutriPath.Api.Services.Admin.AdminTokenService.AdminScheme, options =>
+    {
+        options.MapInboundClaims = false;
+        var parameters = NutriPath.Api.Services.Admin.AdminTokenService.Parameters(
+            jwtSettings, NutriPath.Api.Services.Admin.AdminTokenService.AdminAudience);
+        parameters.NameClaimType = System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub;
+        parameters.RoleClaimType = System.Security.Claims.ClaimTypes.Role;
+        options.TokenValidationParameters = parameters;
+        options.Events = NutriPath.Api.Services.Admin.SecurityState.Events(admin: true);
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(NutriPath.Api.Authorization.AdminPolicies.Add);
+
+// Admin portal services.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.SecurityState>();
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.AdminTokenService>();
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.ISecretProtector, NutriPath.Api.Services.Admin.AesGcmSecretProtector>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.AdminAudit>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.AdminAuthService>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.AdminCli>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.AccountControl>();
 
 var app = builder.Build();
 
@@ -237,6 +262,25 @@ if (knowledgeCommand)
         DbUpdateException or Npgsql.NpgsqlException or FormatException)
     {
         Console.Error.WriteLine($"Knowledge command failed ({ex.GetType().Name}).");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
+if (adminCommand)
+{
+    using var scope = app.Services.CreateScope();
+    try
+    {
+        await scope.ServiceProvider.GetRequiredService<NutriPath.Api.Services.Admin.AdminCli>().RunAsync(args[1..]);
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or DbUpdateException or
+        Npgsql.NpgsqlException)
+    {
+        // The message is ours (no secrets); database errors print only their type.
+        Console.Error.WriteLine(ex is ArgumentException or InvalidOperationException
+            ? $"Admin command failed: {ex.Message}"
+            : $"Admin command failed ({ex.GetType().Name}).");
         Environment.ExitCode = 1;
     }
     return;

@@ -26,4 +26,18 @@ public class User
     // attacker still can't use these values directly.
     public string? RefreshTokenHash { get; set; }
     public DateTime? RefreshTokenExpiresAtUtc { get; set; }
+
+    // Account controls managed from the admin portal.
+    public bool IsSuspended { get; set; }
+    public DateTime? SuspendedAtUtc { get; set; }
+    [System.ComponentModel.DataAnnotations.MaxLength(300)]
+    public string? SuspensionReason { get; set; }
+    public DateTime? LastLoginAtUtc { get; set; }
+    public int FailedLoginCount { get; set; }
+    public DateTime? LockoutEndUtc { get; set; }
+
+    // Changes whenever sessions must end (suspension, role change, revocation). Every access
+    // token carries it, and tokens with an old stamp are rejected.
+    [System.ComponentModel.DataAnnotations.MaxLength(40)]
+    public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
 }

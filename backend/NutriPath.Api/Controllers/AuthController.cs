@@ -52,7 +52,7 @@ public class AuthController(
         options.MaxAge = TimeSpan.FromDays(jwtSettings.Value.RefreshTokenDays);
         Response.Cookies.Append(RefreshCookie, session.RefreshToken, options);
         return Ok(new { session.AccessToken, session.AccessTokenExpiresAtUtc,
-            session.UserId, session.Email, session.FullName });
+            session.UserId, session.Email, session.FullName, session.IsAdmin });
     }
 
     /// <summary>Creates an account and emails a 6-digit verification code.</summary>

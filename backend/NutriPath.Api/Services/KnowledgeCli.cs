@@ -55,7 +55,9 @@ public sealed partial class KnowledgeCli(NutriPathDbContext db, IEmbeddingServic
                 {
                     if (embeddings.Enabled) await IndexAsync(approved);
                     approved.Approved = true;
+                    approved.Status = KnowledgeStatus.Approved;
                     approved.ReviewedAtUtc = DateTime.UtcNow;
+                    approved.UpdatedAtUtc = DateTime.UtcNow;
                     await db.SaveChangesAsync();
                     await transaction.CommitAsync();
                 }
@@ -245,7 +247,10 @@ public sealed partial class KnowledgeCli(NutriPathDbContext db, IEmbeddingServic
         document.ContentHash = input.ContentHash;
         document.Content = input.Content;
         document.Approved = reviewedSeed;
+        document.Status = reviewedSeed ? KnowledgeStatus.Approved : KnowledgeStatus.Draft;
         document.ReviewedAtUtc = reviewedSeed ? DateTime.UtcNow : null;
+        document.UpdatedAtUtc = DateTime.UtcNow;
+        if (id is not null) document.Version++;
         document.Chunks = chunks.Select((chunk, i) => new KnowledgeChunk
         {
             Title = chunks.Count == 1 ? input.Title : $"{input.Title} ({i + 1})",

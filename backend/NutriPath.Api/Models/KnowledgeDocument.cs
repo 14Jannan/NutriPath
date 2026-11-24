@@ -12,6 +12,16 @@ public sealed class KnowledgeDocument
     public string ContentHash { get; set; } = "";
     public DateOnly? PublicationDate { get; set; }
     public DateTime? ReviewedAtUtc { get; set; }
+    // Retrieval only ever uses Approved documents. Status adds the review workflow around it
+    // (Draft → PendingReview → Approved, or Rejected / Archived) and is kept in step with Approved.
     public bool Approved { get; set; }
+    [System.ComponentModel.DataAnnotations.MaxLength(20)]
+    public string Status { get; set; } = KnowledgeStatus.Draft;
+    public int Version { get; set; } = 1;
+    public Guid? CreatedByUserId { get; set; }
+    public Guid? ReviewedByUserId { get; set; }
+    [System.ComponentModel.DataAnnotations.MaxLength(500)]
+    public string? RejectionReason { get; set; }
+    public DateTime? UpdatedAtUtc { get; set; }
     public List<KnowledgeChunk> Chunks { get; set; } = [];
 }

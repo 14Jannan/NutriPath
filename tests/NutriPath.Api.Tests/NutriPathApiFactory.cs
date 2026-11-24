@@ -28,6 +28,8 @@ public class NutriPathApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:Audience", "NutriPath.Client");
         // A fixed, test-only 32-byte key (base64 of "nutripath-test-encryption-key-01").
         builder.UseSetting("Encryption:MessageKey", "bnV0cmlwYXRoLXRlc3QtZW5jcnlwdGlvbi1rZXktMDE=");
+        // A fixed, test-only 32-byte credential key (base64 of "nutripath-test-credential-key-02").
+        builder.UseSetting("Credentials:EncryptionKeys:1", "bnV0cmlwYXRoLXRlc3QtY3JlZGVudGlhbC1rZXktMDI=");
 
         builder.ConfigureServices(services =>
         {
