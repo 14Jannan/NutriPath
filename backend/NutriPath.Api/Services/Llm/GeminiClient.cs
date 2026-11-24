@@ -140,7 +140,12 @@ public sealed class GeminiClient : ILlmClient
         var candidate = result?.Candidates?.FirstOrDefault();
         // Thought summaries are never part of the answer.
         var text = string.Concat(candidate?.Content?.Parts?.Where(p => p.Thought != true).Select(p => p.Text) ?? []);
-        if (candidate?.FinishReason is { } reason && reason is not ("STOP" or "MAX_TOKENS"))
+        if (candidate?.FinishReason == "MAX_TOKENS")
+            // The JSON is cut off and will fail validation. Tamil and Sinhala need several times
+            // more tokens per word than English, so raise Gemini:MaxOutputTokens if this repeats.
+            _logger.LogWarning("Gemini reply hit the output token limit ({OutputTokens} tokens, {ThinkingTokens} thinking).",
+                result?.UsageMetadata?.CandidatesTokenCount, result?.UsageMetadata?.ThoughtsTokenCount);
+        else if (candidate?.FinishReason is { } reason && reason is not "STOP")
         {
             // SAFETY, RECITATION, PROHIBITED_CONTENT, ...: no usable answer. An empty
             // reply fails validation and the user gets the localized "couldn't verify" text.
@@ -227,6 +232,8 @@ public sealed class GeminiClient : ILlmClient
     private sealed class Usage
     {
         [JsonPropertyName("totalTokenCount")] public int? TotalTokenCount { get; set; }
+        [JsonPropertyName("candidatesTokenCount")] public int? CandidatesTokenCount { get; set; }
+        [JsonPropertyName("thoughtsTokenCount")] public int? ThoughtsTokenCount { get; set; }
     }
 
     private sealed class Feedback
