@@ -84,9 +84,12 @@ public sealed partial class KnowledgeCli
         var negatives = rows.Where(r => r.Q.ExpectedTitles.Length == 0).ToList();
         var latency = rows.Select(r => r.Ms).Order().ToList();
         double? Percentile(double f) => latency.Count == 0 ? null : latency[(int)Math.Ceiling(latency.Count * f) - 1];
+        // Would the reply language be recognised from the question alone (no selector, no preference)?
+        var detected = rows.Count(r => LanguageResolver.Detect(r.Q.Question) is { Ambiguous: false } d && d.Language == r.Q.Language);
         return new
         {
             mode, model, language, variant, positives = positives.Count, negatives = negatives.Count,
+            languageDetected = rows.Count == 0 ? (double?)null : Math.Round((double)detected / rows.Count, 3),
             at3 = Score(positives, 3), at5 = Score(positives, 5),
             negativesWithEvidence = negatives.Count == 0 ? (double?)null
                 : (double)negatives.Count(r => r.Results.Count > 0) / negatives.Count,
@@ -107,7 +110,8 @@ public sealed partial class KnowledgeCli
         foreach (var q in questions)
         {
             var start = Stopwatch.GetTimestamp();
-            var vector = (await embeddings.EmbedAsync([q.Question], EmbeddingInputType.Query))[0];
+            var language = LanguageResolver.Detect(q.Question).Language ?? Languages.English;
+            var vector = (await embeddings.EmbedAsync([retrieval.SemanticQuery(q.Question, language)], EmbeddingInputType.Query))[0];
             embedMs.Add(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
             var hits = (await KnowledgeVectors.NearestWithDistanceAsync(db, vector, embeddings.Model, 12))
                 .Select(h => (Title: titles.GetValueOrDefault(h.ChunkId, "?"), h.Distance))

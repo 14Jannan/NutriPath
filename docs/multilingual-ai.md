@@ -186,6 +186,45 @@ Limitations, stated plainly:
   are optimistic**. A held-out question set is needed for an unbiased figure.
 * Entries need review by fluent speakers before they are relied on.
 
+## Tanglish and Singlish (romanised Tamil and Sinhala)
+
+Users can type Tamil or Sinhala in English letters ("enakku protein evlo venum?",
+"mata protein kochchara oneda?"). They are understood, and **the reply is written in Tamil or
+Sinhala script** (a product decision; a romanised reply fails the language check).
+
+* **Spelling keys** (`Transliteration.Key`): romanisation has no standard spelling, so words are
+  compared after folding common variants: zh→l, th→t, dh→d, ph→f, w→v, and repeated letters
+  collapsed. "thanni"/"tanni", "kozhuppu"/"koluppu", "wathura"/"vathura" and "venum"/"vennum"
+  match.
+* **Detection**: a word counts for Tanglish or Singlish if it is a known word (about 150 each),
+  a known stem with a suffix ("paruppula", "kedaikkuma"), a grammatical particle written as a
+  separate word (Tamil "ku", "la", "ah"; Sinhala "da", "eka", "ekata", "nam") or has a typical
+  verb ending (Tamil "-anum", "-alama"; Sinhala "-nawa", "-nna"). Two or more points are needed.
+  Unclear messages fall back to the saved preference or default (the chat selector always works).
+* **Retrieval**: the term mapping includes romanised variants and matches suffixed words. The
+  multilingual embedding model handles Tamil and Sinhala script well but not romanised text, so a
+  romanised question is embedded together with its mapped English nutrition terms
+  (`Knowledge:TransliterationQueryExpansion`, default on). Script and English questions are
+  embedded unchanged.
+
+Results (E5, top-3 recall; ✱ = held-out questions written after the detection rules were last
+changed and not used to tune them):
+
+| | Tanglish | Singlish |
+| --- | --- | --- |
+| Semantic, without expansion (15 questions) | 0.40 | 0.30 |
+| Semantic, with expansion (15 questions) | 0.93 | 0.90 |
+| Hybrid (15 questions) | 0.97 | 0.97 |
+| Semantic ✱ (8 questions) | 0.81 | 0.94 |
+| Hybrid ✱ (8 questions) | 1.00 | 0.94 |
+| Language detected, first set before → after rule changes | 0.80 → 1.00 | 0.93 → 1.00 |
+| Language detected ✱ | **0.75** | **0.88** |
+
+The first set's detection figures after the change are optimistic (the rules were adjusted after
+seeing its misses); the held-out figures are the honest estimate. English retrieval on the
+104-question benchmark is unchanged (semantic 0.948, hybrid 0.979), and none of those English
+questions is detected as Tanglish or Singlish. All word lists need fluent-speaker review.
+
 ## Language resolution
 
 `LanguageResolver` picks the reply language in this order:

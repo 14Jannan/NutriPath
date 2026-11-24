@@ -51,35 +51,6 @@ public sealed class LanguageResolver(IOptions<AiSettings> settings) : ILanguageR
         @"|\b(?:english\s*-?\s*la|englishla|ingreesiyen|englishen)\b(?<en>)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-    // Common transliterated words. Kept small and conservative; two or more hits are needed.
-    internal static readonly HashSet<string> TanglishMarkers =
-    [
-        "enakku", "enaku", "evvalavu", "evlo", "evalo", "evlavu", "venum", "vendum", "venuma", "enna", "eppadi",
-        "epdi", "sollunga", "sollu", "saapadu", "sapadu", "saappadu", "sapidalama", "saapidalama", "sapidanum",
-        "saapidanum", "kudikkanum", "kudikalama", "thanni", "thaneer", "illa", "illai", "irukku", "iruku", "romba",
-        "konjam", "nallathu", "nalladha", "puratham", "kozhuppu", "paruppu", "soru", "sadam", "arisi", "kaalai",
-        "madhiyam", "iravu", "unavu", "edai", "kammi", "jasthi", "athigam", "kuraikka", "ungal", "unga", "ennoda",
-        "enoda", "naan", "nan", "dhinamum", "thinamum", "vazhipazham", "muttai", "meen", "kozhi", "thengai",
-    ];
-
-    internal static readonly HashSet<string> SinglishMarkers =
-    [
-        "mata", "mage", "oya", "oyata", "kiyada", "kiyanna", "kohomada", "monawada", "monada", "kanna", "kanne",
-        "kaawa", "kawa", "oneda", "oney", "ona", "puluwanda", "puluwan", "ganna", "keeyada", "kochchara", "hari",
-        "neda", "karanna", "bath", "wathura", "thiyenawa", "thiyanawa", "ehema", "honda", "naraka", "kema",
-        "kaema", "udeta", "dawalta", "bara", "adu", "wadi", "parippu", "elawalu", "palathuru", "sini",
-        "lunu", "kiri", "biththara", "malu", "kukul", "dinapatha", "dawasata", "aththa", "nadda",
-    ];
-
-    // Frequent English words that suggest a Latin-script message is really English.
-    private static readonly HashSet<string> EnglishWords =
-    [
-        "the", "is", "are", "what", "how", "much", "many", "do", "does", "did", "can", "should", "i", "my", "me",
-        "need", "eat", "food", "foods", "drink", "with", "for", "and", "or", "a", "an", "of", "to", "in", "on",
-        "which", "why", "when", "today", "daily", "good", "best", "healthy", "about", "your", "you", "it", "this",
-        "that", "be", "have", "has", "give", "tell", "show", "help", "please", "per", "day", "meal", "diet",
-    ];
-
     private static readonly Regex LatinWord = new("[a-z]+", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     public LanguageResolution Resolve(string question, string? selectedLanguage, string? savedPreference)
@@ -144,9 +115,14 @@ public sealed class LanguageResolver(IOptions<AiSettings> settings) : ILanguageR
         var words = LatinWord.Matches(text.ToLowerInvariant()).Select(m => m.Value).ToList();
         if (words.Count == 0) return (null, true);
 
-        var ta = words.Count(TanglishMarkers.Contains);
-        var si = words.Count(SinglishMarkers.Contains);
-        var en = words.Count(EnglishWords.Contains);
+        // Spelling keys fold romanisation variants ("thanni"/"tanni", "wathura"/"vathura").
+        // A word counts for a language if it is a known word, a known stem with a suffix, a
+        // grammatical particle or has a typical verb ending (see Transliteration.Score).
+        var scores = words.Where(w => !Transliteration.EnglishWords.Contains(w))
+            .Select(w => Transliteration.Score(Transliteration.Key(w))).ToList();
+        var ta = scores.Sum(s => s.Tamil);
+        var si = scores.Sum(s => s.Sinhala);
+        var en = words.Count(Transliteration.EnglishWords.Contains);
         if (Math.Max(ta, si) >= 2 && ta != si && Math.Max(ta, si) >= en)
             return (ta > si ? Languages.Tamil : Languages.Sinhala, false);
         if (Math.Max(ta, si) >= 1 && words.Count <= 4)
