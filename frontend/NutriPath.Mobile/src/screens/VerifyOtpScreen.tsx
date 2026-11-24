@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, type TextInputInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Button } from '@/components/Button';
@@ -18,7 +18,7 @@ const CODE_LENGTH = 6;
 export function VerifyOtpScreen({ email, onVerified, onGoBack }: VerifyOtpScreenProps) {
   const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(''));
   const [secondsLeft, setSecondsLeft] = useState(120);
-  const inputRefs = useRef<Array<TextInput | null>>([]);
+  const inputRefs = useRef<Array<TextInputInstance | null>>([]);
 
   useEffect(() => {
     if (secondsLeft <= 0) return;

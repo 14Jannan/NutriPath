@@ -1,0 +1,73 @@
+{
+  "chat": {
+    "title": "Assistant",
+    "disclaimer": "General wellness guidance, not medical advice.",
+    "history": "History",
+    "historyA11y": "Chat history",
+    "newChat": "New",
+    "newChatA11y": "Start a new chat",
+    "newChatStarted": "New chat started",
+    "earlierChats": "Earlier chats are in History.",
+    "welcome": "Hi! Ask me about your meals today, your weekly score, or what to eat next.",
+    "placeholder": "Ask NutriPath anything...",
+    "send": "Send",
+    "thinking": "Thinking...",
+    "limitedEvidence": "Limited supporting evidence",
+    "sources": "Sources",
+    "sourceError": "Unable to open this source",
+    "openChatError": "Couldn't open that chat",
+    "sorry": "Sorry, I couldn't answer that.",
+    "errors": {
+      "unavailable": "The assistant is busy right now. Please try again in a moment.",
+      "rateLimited": "The assistant is busy right now. Please try again in {{wait}}.",
+      "notPermitted": "The assistant isn't available for your account right now.",
+      "busy": "Still working on your last question. Please wait for it to finish.",
+      "network": "Can't reach the server. Check your connection and that the backend is running."
+    },
+    "locked": {
+      "title": "Assistant limit reached",
+      "at": "You can chat again at {{time}} (in {{wait}}).",
+      "soon": "You can chat again soon.",
+      "history": "Your earlier chats are still in History."
+    },
+    "nearLimit": "You've used {{percent}}% of your assistant allowance for the last {{hours}} hours.",
+    "wait": {
+      "lessThanMinute": "less than a minute"
+    },
+    "language": {
+      "label": "Reply language",
+      "auto": "Automatic",
+      "en": "English",
+      "ta": "தமிழ்",
+      "si": "සිංහල",
+      "a11y": "Reply in {{name}}"
+    },
+    "prompts": {
+      "eatNow": "What should I eat now?",
+      "score": "Explain my score",
+      "fibreSnack": "Suggest a high-fibre snack",
+      "today": "How am I doing today?",
+      "weekly": "Give me my weekly summary",
+      "streak": "What's my logging streak?"
+    }
+  },
+  "history": {
+    "title": "Chat history",
+    "close": "Close chat history",
+    "search": "Search your messages",
+    "clear": "Clear search",
+    "noMatches": "No messages match \"{{term}}\".",
+    "empty": "No chats yet. Your conversations will appear here.",
+    "loadError": "Couldn't load your chats",
+    "deleteTitle": "Delete this chat?",
+    "deleteBody": "\"{{title}}\" and its {{count}} messages will be deleted permanently.",
+    "delete": "Delete",
+    "deleted": "Chat deleted",
+    "deleteError": "Couldn't delete the chat",
+    "openMessage": "Open message in {{title}}",
+    "openChat": "Open chat: {{title}}",
+    "deleteChat": "Delete chat: {{title}}",
+    "messages": "{{count}} messages",
+    "current": "Current"
+  }
+}

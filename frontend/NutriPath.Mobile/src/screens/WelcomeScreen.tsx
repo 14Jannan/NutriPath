@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Button } from '@/components/Button';
+import { DailyRhythmAnimation } from '@/components/DailyRhythmAnimation';
 import { colors, typography, spacing, radii } from '@/theme';
 
 
@@ -36,17 +37,7 @@ export function WelcomeScreen({ onGetStarted, onLogIn }: WelcomeScreenProps) {
 
         {/* Hero image card */}
         <View style={styles.heroCard}>
-          <View style={styles.heroImageWrap}>
-            <Image source={require('../../assets/images/welcome-hero.jpg')} style={styles.heroImage} resizeMode="cover" />
-            <View style={styles.freshTag}>
-              <View style={styles.pulseDot} />
-              <Text style={styles.freshTagText}>Island Fresh Insights</Text>
-            </View>
-            <View style={styles.portionTag}>
-              <MaterialCommunityIcons name="fire" size={14} color={colors.onSecondaryFixed} />
-              <Text style={styles.portionTagText}>Smart Portion</Text>
-            </View>
-          </View>
+          <DailyRhythmAnimation />
 
           {/* Live preview pills */}
           <View style={styles.pillRow}>
@@ -144,35 +135,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
   },
-  heroImageWrap: { width: '100%', aspectRatio: 4 / 3, backgroundColor: colors.surfaceContainerLow },
-  heroImage: { width: '100%', height: '100%' },
-  freshTag: {
-    position: 'absolute',
-    bottom: 12,
-    left: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
-  },
-  pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.emerald },
-  freshTagText: { ...typography.labelSm, color: colors.onSurface },
-  portionTag: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(179,239,217,0.9)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radii.pill,
-  },
-  portionTagText: { ...typography.labelSm, color: colors.onSecondaryFixed, fontWeight: '600' },
   pillRow: { flexDirection: 'row', gap: spacing.sm, padding: spacing.sm },
   previewPill: {
     flex: 1,

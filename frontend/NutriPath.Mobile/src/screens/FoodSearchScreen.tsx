@@ -122,7 +122,7 @@ export function FoodSearchScreen() {
                 <Text style={styles.addOwnButtonText}>Add "{query.trim()}" as your own food</Text>
               </Pressable>
             </View>
-          ) : null
+          ) : undefined
         }
         ListFooterComponent={
           results.length > 0 && !loading ? (
@@ -130,7 +130,7 @@ export function FoodSearchScreen() {
               <MaterialCommunityIcons name="plus-circle-outline" size={18} color={colors.primary} />
               <Text style={styles.addOwnLinkText}>Can't find it? Add your own food</Text>
             </Pressable>
-          ) : null
+          ) : undefined
         }
         renderItem={({ item }) => (
           <Pressable

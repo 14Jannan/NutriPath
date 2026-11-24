@@ -456,6 +456,10 @@ namespace NutriPath.Api.Migrations
                     b.Property<decimal>("HeightCm")
                         .HasColumnType("numeric");
 
+                    b.Property<string>("PreferredLanguage")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
                     b.Property<int>("Sex")
                         .HasColumnType("integer");
 

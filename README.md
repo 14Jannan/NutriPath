@@ -20,6 +20,23 @@ Under active phase-by-phase development. See `docs/phase-0-architecture.md`.
 See [Nutrition assistant setup and evaluation](docs/ai-nutrition-phase1.md)
 for knowledge migration, trusted CLI commands, and local embeddings.
 
+## Multilingual assistant (English, Tamil, Sinhala)
+
+The assistant answers in English, Tamil or Sinhala, including code-mixed and
+transliterated questions. Retrieval uses the multilingual embedding model
+`intfloat/multilingual-e5-small` (local Python worker in
+`infrastructure/embeddings/`) against the reviewed English knowledge base, and
+answers come from Groq (default) or Google Gemini (`gemini-3.5-flash-lite`),
+selected with `AI:Provider`. The chat screen has a reply-language selector.
+
+Gemini's free tier may use submitted data to improve Google's products, so a
+privacy guard limits Gemini to synthetic `@nutripath.test` accounts unless
+real-user processing is explicitly approved. Keep `Gemini:ApiKey` in user
+secrets or the `Gemini__ApiKey` environment variable.
+
+See [Multilingual AI architecture](docs/multilingual-ai.md) for setup,
+configuration, reindexing, evaluation results, privacy notes and rollback.
+
 ## Authentication deployment
 
 - On iOS and Android the app keeps both tokens in Expo SecureStore. On web the

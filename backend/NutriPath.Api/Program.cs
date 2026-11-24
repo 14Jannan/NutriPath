@@ -143,7 +143,15 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<INutritionCalculationService, NutritionCalculationService>();
 builder.Services.AddScoped<IWeeklyScoreService, WeeklyScoreService>();
 builder.Services.AddScoped<IAiContextBuilder, AiContextBuilder>();
-builder.Services.AddScoped<IAiService, AiService>();
+// Explicit factory: AiService also has a single-provider constructor for tests and tools.
+builder.Services.AddScoped<IAiService>(sp => new AiService(
+    sp.GetRequiredService<IAiContextBuilder>(),
+    sp.GetRequiredService<IKnowledgeRetrievalService>(),
+    sp.GetRequiredService<NutriPath.Api.Services.Llm.ILlmProviderSelector>(),
+    sp.GetRequiredService<NutriPath.Api.Services.Multilingual.ILanguageResolver>(),
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiSettings>>(),
+    sp.GetRequiredService<NutriPathDbContext>(),
+    sp.GetRequiredService<IMessageProtector>()));
 builder.Services.AddScoped<IAiUsageService, AiUsageService>();
 
 // Chat messages are encrypted at rest with this key. It lives in user
@@ -176,6 +184,18 @@ builder.Services.AddHttpClient<IUsdaFoodSyncService, UsdaFoodSyncService>();
 // Imports everyday foods on startup when the catalog is nearly empty.
 builder.Services.AddHostedService<StarterFoodCatalogSeeder>();
 builder.Services.AddHttpClient<IGroqClient, GroqClient>(client => client.Timeout = TimeSpan.FromSeconds(30));
+
+// Multilingual assistant: provider selection (with the Gemini free-tier privacy guard),
+// language resolution and one-request-at-a-time per user.
+builder.Services.Configure<AiSettings>(builder.Configuration.GetSection("AI"));
+builder.Services.Configure<GeminiSettings>(builder.Configuration.GetSection("Gemini"));
+builder.Services.AddSingleton<ChatRequestGate>();
+builder.Services.AddSingleton<NutriPath.Api.Services.Multilingual.ILanguageResolver,
+    NutriPath.Api.Services.Multilingual.LanguageResolver>();
+builder.Services.AddScoped<NutriPath.Api.Services.Llm.GroqLlmClient>();
+// Per-attempt timeouts and retries live in GeminiClient; this only bounds the whole call.
+builder.Services.AddHttpClient<NutriPath.Api.Services.Llm.GeminiClient>(client => client.Timeout = TimeSpan.FromSeconds(150));
+builder.Services.AddScoped<NutriPath.Api.Services.Llm.ILlmProviderSelector, NutriPath.Api.Services.Llm.LlmProviderSelector>();
 
 builder.Services.AddDbContext<NutriPathDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));

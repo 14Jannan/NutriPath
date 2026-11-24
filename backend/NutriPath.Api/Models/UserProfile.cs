@@ -38,4 +38,9 @@ public class UserProfile
     // needed for a simple list of strings like this.
     public List<string> Allergies { get; set; } = new();
     public List<string> DietaryPreferences { get; set; } = new();
+
+    // Assistant reply language chosen in the chat ("en", "ta" or "si"); null until chosen.
+    // Used when a question's own language is unclear (short follow-ups, transliteration).
+    [System.ComponentModel.DataAnnotations.MaxLength(8)]
+    public string? PreferredLanguage { get; set; }
 }

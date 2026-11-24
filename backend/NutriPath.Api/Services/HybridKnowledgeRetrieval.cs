@@ -24,15 +24,25 @@ public sealed class HybridKnowledgeRetrieval(
         var topK = Math.Clamp(evaluationTopK ?? configuration.GetValue("Knowledge:TopK", 3), 1, 12);
         var count = Math.Clamp(configuration.GetValue("Knowledge:CandidateCount", 12), topK, 50);
         var minimumKeyword = Math.Clamp(configuration.GetValue("Knowledge:MinimumKeywordSimilarity", 0d), 0, 1);
-        var keywords = keyword.Search(query, count, minimumKeyword).Select(c => c.Id).ToList();
+        // The keyword index is English. Tamil, Sinhala and transliterated questions are
+        // expanded with reviewed English nutrition terms; without a mapped term they simply
+        // find no keyword evidence rather than a misleading match.
+        var questionLanguage = Multilingual.LanguageResolver.Detect(query).Language ?? Multilingual.Languages.English;
+        var keywordQuery = Multilingual.NutritionTermLexicon.ExpandForKeywordSearch(query, questionLanguage);
+        var keywords = keyword.Search(keywordQuery, count, minimumKeyword).Select(c => c.Id).ToList();
         List<Guid>? semantic = null;
         if (mode != "keyword" && embeddings.Enabled && db.Database.IsNpgsql())
         {
             try
             {
-                var vectors = await embeddings.EmbedAsync([query]);
+                // A model with no stored vectors was never reindexed. Searching it would return
+                // nothing and look like "no evidence", so treat the channel as unavailable.
+                if (!strict && await VectorCountAsync(embeddings.Model) == 0)
+                    throw new InvalidOperationException("No vectors are indexed for the configured embedding model.");
+                var vectors = await embeddings.EmbedAsync([query], EmbeddingInputType.Query);
                 semantic = await KnowledgeVectors.SearchAsync(db, vectors[0], embeddings.Model,
-                    Math.Clamp(configuration.GetValue("Knowledge:MaxVectorDistance", 0.65), 0, 2), count);
+                    EmbeddingModels.MaxDistance(configuration, embeddings.Model,
+                        crossLingual: questionLanguage != Multilingual.Languages.English), count);
             }
             catch (Exception ex) when (!strict && ex is (HttpRequestException or OperationCanceledException or
                 InvalidOperationException or NpgsqlException or System.Text.Json.JsonException or FormatException))
@@ -62,6 +72,17 @@ public sealed class HybridKnowledgeRetrieval(
             if (selected.Count == topK) break;
         }
         return selected;
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int Count, DateTime Until)>
+        VectorCounts = new();
+
+    private async Task<int> VectorCountAsync(string model)
+    {
+        if (VectorCounts.TryGetValue(model, out var cached) && cached.Until > DateTime.UtcNow) return cached.Count;
+        var count = await KnowledgeVectors.CountVectorsForModelAsync(db, model);
+        VectorCounts[model] = (count, DateTime.UtcNow.AddSeconds(60));
+        return count;
     }
 
     public static List<Guid> Fuse(params IReadOnlyList<Guid>[] rankings)

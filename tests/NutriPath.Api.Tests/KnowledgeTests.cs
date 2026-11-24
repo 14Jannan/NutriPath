@@ -172,9 +172,19 @@ public class KnowledgeTests
         var service = new LocalEmbeddingService(http, configuration);
         handler.Model = service.Model;
         Assert.Equal(384, Assert.Single(await service.EmbedAsync(["nutrition"])).Length);
+        Assert.Equal("passage", handler.LastInputType);
+        await service.EmbedAsync(["எனக்கு எவ்வளவு புரதம் தேவை?"], EmbeddingInputType.Query);
+        Assert.Equal("query", handler.LastInputType);
+        Assert.Contains("புரதம்", handler.LastBody);
         handler.Dimension = 383;
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.EmbedAsync(["nutrition"]));
         handler.Dimension = 384;
+        handler.Normalized = false;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.EmbedAsync(["nutrition"]));
+        handler.Normalized = true;
+        handler.EchoInputType = "passage";
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.EmbedAsync(["nutrition"], EmbeddingInputType.Query));
+        handler.EchoInputType = null;
         handler.Model = "another-model";
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.EmbedAsync(["nutrition"]));
     }
@@ -183,14 +193,26 @@ public class KnowledgeTests
     {
         public string Model { get; set; } = "";
         public int Dimension { get; set; } = 384;
+        public bool Normalized { get; set; } = true;
+        public string? EchoInputType { get; set; }
+        public string? LastInputType { get; private set; }
+        public string LastBody { get; private set; } = "";
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Assert.True(request.Content?.Headers.ContentLength > 0);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            LastBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+            using var json = JsonDocument.Parse(LastBody);
+            LastInputType = json.RootElement.GetProperty("inputType").GetString();
+            var value = Normalized ? 1f / MathF.Sqrt(Dimension) : 1f;
+            return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = JsonContent.Create(new { model = Model, vectors = new[] { Enumerable.Repeat(1f, Dimension).ToArray() } }),
-            });
+                Content = JsonContent.Create(new
+                {
+                    model = Model, inputType = EchoInputType ?? LastInputType,
+                    vectors = new[] { Enumerable.Repeat(value, Dimension).ToArray() },
+                }),
+            };
         }
     }
 }

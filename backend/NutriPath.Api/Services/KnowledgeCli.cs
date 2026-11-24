@@ -8,7 +8,7 @@ using NutriPath.Api.Models;
 
 namespace NutriPath.Api.Services;
 
-public sealed class KnowledgeCli(NutriPathDbContext db, IEmbeddingService embeddings, IConfiguration configuration,
+public sealed partial class KnowledgeCli(NutriPathDbContext db, IEmbeddingService embeddings, IConfiguration configuration,
     IServiceScopeFactory scopes, HybridKnowledgeRetrieval retrieval)
 {
     private const int MaximumBytes = 256 * 1024;
@@ -73,14 +73,31 @@ public sealed class KnowledgeCli(NutriPathDbContext db, IEmbeddingService embedd
                 await ReportCoverageAsync();
                 break;
             case ["reindex"]:
+                // Idempotent: vectors are upserted per (chunk, model), so reruns only refresh them.
+                // Other models' vectors (e.g. MiniLM during an E5 rollout) are left untouched.
                 if (!embeddings.Enabled) throw new InvalidOperationException("Configure Knowledge:EmbeddingUrl first.");
+                var reindexed = 0;
+                var documents = 0;
                 foreach (var d in await db.KnowledgeDocuments.Include(d => d.Chunks)
                     .Where(d => d.Approved && d.Language == "en").ToListAsync())
                 {
                     await using var transaction = await db.Database.BeginTransactionAsync();
                     await IndexAsync(d);
                     await transaction.CommitAsync();
+                    reindexed += d.Chunks.Count;
+                    documents++;
                 }
+                Console.WriteLine(JsonSerializer.Serialize(new { model = embeddings.Model, documents, chunks = reindexed }, JsonOptions));
+                await ValidateEmbeddingsAsync();
+                break;
+            case ["validate-embeddings"]:
+                await ValidateEmbeddingsAsync();
+                break;
+            case ["evaluate-multilingual", var path]:
+                await EvaluateMultilingualAsync(path);
+                break;
+            case ["evaluate-llm", var path, .. var providers]:
+                await EvaluateLlmAsync(path, providers);
                 break;
             case ["evaluate", var path]:
                 var questions = JsonSerializer.Deserialize<EvaluationQuestion[]>(await ReadBoundedAsync(path), JsonOptions)
@@ -113,7 +130,7 @@ public sealed class KnowledgeCli(NutriPathDbContext db, IEmbeddingService embedd
                 else Console.WriteLine("Semantic and hybrid benchmarks require Knowledge:EmbeddingUrl and indexed vectors.");
                 break;
             default:
-                throw new ArgumentException("Commands: seed | list | import FILE | update ID FILE | review ID | approve ID | delete ID | enable-vector | reindex | coverage | evaluate FILE");
+                throw new ArgumentException("Commands: seed | list | import FILE | update ID FILE | review ID | approve ID | delete ID | enable-vector | reindex | validate-embeddings | coverage | evaluate FILE | evaluate-multilingual FILE | evaluate-llm FILE [Gemini] [Groq]");
         }
     }
 
@@ -246,7 +263,8 @@ public sealed class KnowledgeCli(NutriPathDbContext db, IEmbeddingService embedd
     {
         foreach (var batch in document.Chunks.Chunk(16))
         {
-            var vectors = await embeddings.EmbedAsync(batch.Select(c => $"{c.Title}\n{c.Content}").ToArray());
+            var vectors = await embeddings.EmbedAsync(batch.Select(c => $"{c.Title}\n{c.Content}").ToArray(),
+                EmbeddingInputType.Passage);
             for (var i = 0; i < batch.Length; i++)
                 await KnowledgeVectors.PutAsync(db, batch[i].Id, embeddings.Model, vectors[i]);
         }

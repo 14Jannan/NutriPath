@@ -15,6 +15,12 @@ backend/**/appsettings.Local.json
 tests/**/bin/
 tests/**/obj/
 
+# ---------- Python embedding service ----------
+infrastructure/embeddings/.venv/
+infrastructure/embeddings/.model-cache/
+**/__pycache__/
+**/.pytest_cache/
+
 # ---------- Docker ----------
 infrastructure/docker/**/*.log
 

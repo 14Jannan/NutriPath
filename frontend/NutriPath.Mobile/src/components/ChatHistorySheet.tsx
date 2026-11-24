@@ -8,6 +8,9 @@ import { describeApiError } from '@/api/client';
 import { confirmAction, showAlert } from '@/utils/alert';
 import { describeDay, toLocalIsoDate } from '@/utils/date';
 import { colors, radii, spacing, typography } from '@/theme';
+import { useTranslation } from 'react-i18next';
+import '@/i18n';
+import { scriptAwareStyle } from '@/utils/script';
 
 const SEARCH_DELAY_MS = 300;
 
@@ -52,6 +55,7 @@ interface ChatHistorySheetProps {
  * message across all of them. Tapping a chat or a search result opens it.
  */
 export function ChatHistorySheet({ visible, currentConversationId, onClose, onOpen, onDeleted }: ChatHistorySheetProps) {
+  const { t } = useTranslation();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -63,9 +67,9 @@ export function ChatHistorySheet({ visible, currentConversationId, onClose, onOp
     aiApi
       .listConversations()
       .then(setConversations)
-      .catch((error) => showAlert("Couldn't load your chats", describeApiError(error)))
+      .catch((error) => showAlert(t('history.loadError'), describeApiError(error)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   // Fresh list every time the sheet opens.
   useEffect(() => {
@@ -101,17 +105,17 @@ export function ChatHistorySheet({ visible, currentConversationId, onClose, onOp
 
   function remove(conversation: ConversationSummary) {
     confirmAction(
-      'Delete this chat?',
-      `"${conversation.title}" and its ${conversation.messageCount} messages will be deleted permanently.`,
-      'Delete',
+      t('history.deleteTitle'),
+      t('history.deleteBody', { title: conversation.title, count: conversation.messageCount }),
+      t('history.delete'),
       async () => {
         try {
           await aiApi.deleteConversation(conversation.id);
           setConversations((prev) => prev.filter((c) => c.id !== conversation.id));
           onDeleted(conversation.id);
-          showAlert('Chat deleted', undefined, 'success');
+          showAlert(t('history.deleted'), undefined, 'success');
         } catch (error) {
-          showAlert("Couldn't delete the chat", describeApiError(error));
+          showAlert(t('history.deleteError'), describeApiError(error));
         }
       },
       true
@@ -126,8 +130,8 @@ export function ChatHistorySheet({ visible, currentConversationId, onClose, onOp
       <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
         <View style={styles.inner}>
           <View style={styles.header}>
-            <Text style={styles.title}>Chat history</Text>
-            <Pressable onPress={onClose} style={styles.iconButton} accessibilityLabel="Close chat history" hitSlop={6}>
+            <Text style={styles.title}>{t('history.title')}</Text>
+            <Pressable onPress={onClose} style={styles.iconButton} accessibilityLabel={t('history.close')} hitSlop={6}>
               <MaterialCommunityIcons name="close" size={24} color={colors.onSurface} />
             </Pressable>
           </View>
@@ -135,17 +139,17 @@ export function ChatHistorySheet({ visible, currentConversationId, onClose, onOp
           <View style={styles.searchBar}>
             <MaterialCommunityIcons name="magnify" size={20} color={colors.onSurfaceVariant} />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, scriptAwareStyle(query || t('history.search'), styles.searchInput)]}
               value={query}
               onChangeText={setQuery}
-              placeholder="Search your messages"
+              placeholder={t('history.search')}
               placeholderTextColor={colors.outline}
-              accessibilityLabel="Search your messages"
+              accessibilityLabel={t('history.search')}
               returnKeyType="search"
             />
             {searching && <ActivityIndicator size="small" color={colors.primary} />}
             {!!query && !searching && (
-              <Pressable onPress={() => setQuery('')} accessibilityLabel="Clear search" hitSlop={6}>
+              <Pressable onPress={() => setQuery('')} accessibilityLabel={t('history.clear')} hitSlop={6}>
                 <MaterialCommunityIcons name="close-circle" size={18} color={colors.outline} />
               </Pressable>
             )}
@@ -158,13 +162,13 @@ export function ChatHistorySheet({ visible, currentConversationId, onClose, onOp
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.list}
               ListEmptyComponent={
-                results && !searching ? <Text style={styles.empty}>No messages match "{term}".</Text> : null
+                results && !searching ? <Text style={styles.empty}>{t('history.noMatches', { term })}</Text> : undefined
               }
               renderItem={({ item }) => (
                 <Pressable
                   style={({ pressed }) => [styles.row, pressed && styles.pressed]}
                   onPress={() => onOpen(item.conversationId, item.messageId)}
-                  accessibilityLabel={`Open message in ${item.conversationTitle}`}
+                  accessibilityLabel={t('history.openMessage', { title: item.conversationTitle })}
                 >
                   <MaterialCommunityIcons
                     name={item.role === 'User' ? 'account-outline' : 'robot-happy-outline'}
@@ -191,7 +195,7 @@ export function ChatHistorySheet({ visible, currentConversationId, onClose, onOp
               ListEmptyComponent={
                 <View style={styles.emptyBlock}>
                   <MaterialCommunityIcons name="chat-outline" size={36} color={colors.outline} />
-                  <Text style={styles.empty}>No chats yet. Your conversations will appear here.</Text>
+                  <Text style={styles.empty}>{t('history.empty')}</Text>
                 </View>
               }
               renderItem={({ item }) => {
@@ -200,22 +204,22 @@ export function ChatHistorySheet({ visible, currentConversationId, onClose, onOp
                   <Pressable
                     style={({ pressed }) => [styles.row, current && styles.rowCurrent, pressed && styles.pressed]}
                     onPress={() => onOpen(item.id)}
-                    accessibilityLabel={`Open chat: ${item.title}`}
+                    accessibilityLabel={t('history.openChat', { title: item.title })}
                   >
                     <MaterialCommunityIcons name="chat-processing-outline" size={20} color={colors.primary} />
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.rowTitle} numberOfLines={2}>
+                      <Text style={[styles.rowTitle, scriptAwareStyle(item.title, styles.rowTitle)]} numberOfLines={2}>
                         {item.title}
                       </Text>
                       <Text style={styles.rowMeta}>
-                        {describeWhen(item.lastMessageAtUtc)} · {item.messageCount} messages
-                        {current ? ' · Current' : ''}
+                        {describeWhen(item.lastMessageAtUtc)} · {t('history.messages', { count: item.messageCount })}
+                        {current ? ` · ${t('history.current')}` : ''}
                       </Text>
                     </View>
                     <Pressable
                       onPress={() => remove(item)}
                       style={styles.iconButton}
-                      accessibilityLabel={`Delete chat: ${item.title}`}
+                      accessibilityLabel={t('history.deleteChat', { title: item.title })}
                       hitSlop={6}
                     >
                       <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.outline} />
