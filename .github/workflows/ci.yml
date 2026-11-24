@@ -50,6 +50,27 @@ jobs:
           --filter FullyQualifiedName~KnowledgeVectorIntegrationTests
           --logger "console;verbosity=normal"
 
+  embeddings:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infrastructure/embeddings
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The standard suite uses a fake encoder, so it needs neither torch nor a model
+      # download. Live model checks run locally with NUTRIPATH_LIVE_MODEL_TESTS=1.
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Test
+        run: python -m pytest -q
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
