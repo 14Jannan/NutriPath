@@ -39,7 +39,7 @@ public class AiController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
-    public async Task<IActionResult> Chat([FromBody] ChatRequest request)
+    public async Task<IActionResult> Chat([FromBody] ChatRequest request, [FromServices] ChatRequestGate gate)
     {
         if (string.IsNullOrWhiteSpace(request.Question))
             return BadRequest(new { message = "A question is required." });
@@ -47,6 +47,9 @@ public class AiController : ControllerBase
             return BadRequest(new { message = "Please keep questions under 2,000 characters." });
         if (!ClientDate.TryResolveClock(request.LocalDate, request.LocalDateTime, out var clock))
             return BadRequest(new { message = "Your device's date or time looks wrong. Please check your clock." });
+        var language = request.Language?.Trim().ToLowerInvariant();
+        if (language is not (null or "" or "auto") && !Services.Multilingual.Languages.IsSupported(language))
+            return BadRequest(new { message = "Supported languages are en, ta, si and auto." });
 
         var usage = await _usage.GetStatusAsync(CurrentUserId);
         if (usage.Locked)
@@ -56,17 +59,32 @@ public class AiController : ControllerBase
                 usage,
             });
 
+        // One answer at a time per user: a double-tap or retry storm must not
+        // spend the provider quota twice.
+        using var turn = gate.TryEnter(CurrentUserId);
+        if (turn is null)
+            return Conflict(new { message = "A reply is already being generated. Please wait for it." });
+
         try
         {
-            var response = await _aiService.ChatAsync(CurrentUserId, request.Question, clock, request.ConversationId);
+            var response = await _aiService.ChatAsync(CurrentUserId, request.Question, clock, request.ConversationId,
+                language, HttpContext.RequestAborted);
             return Ok(response with { Usage = await _usage.GetStatusAsync(CurrentUserId) });
         }
         catch (KeyNotFoundException ex)
         {
             return NotFound(new { message = ex.Message });
         }
+        catch (Services.Llm.LlmProviderNotPermittedException)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new { message = "The assistant isn't available for your account right now.", code = "provider_not_permitted" });
+        }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
+            if (ex is Services.Llm.LlmRateLimitedException { RetryAfter: { } wait } && wait > TimeSpan.Zero)
+                Response.Headers.RetryAfter = ((int)Math.Ceiling(Math.Min(wait.TotalSeconds, 3600))).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
             return StatusCode(StatusCodes.Status503ServiceUnavailable,
                 new { message = "The assistant is temporarily unavailable. Please try again." });
         }

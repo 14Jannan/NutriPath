@@ -5,7 +5,9 @@ namespace NutriPath.Api.Services;
 public interface IAiService
 {
     /// <summary>Answers a question. Throws KeyNotFoundException if conversationId isn't the user's.</summary>
-    Task<ChatResponse> ChatAsync(Guid userId, string question, ClientClock clock, Guid? conversationId = null);
+    /// <remarks>language is "en", "ta", "si", or null/"auto" to resolve it from the question.</remarks>
+    Task<ChatResponse> ChatAsync(Guid userId, string question, ClientClock clock, Guid? conversationId = null,
+        string? language = null, CancellationToken cancellationToken = default);
     Task<List<ChatHistoryMessage>> GetHistoryAsync(Guid userId);
     Task<Guid> StartNewConversationAsync(Guid userId);
     Task<List<ConversationSummary>> ListConversationsAsync(Guid userId);

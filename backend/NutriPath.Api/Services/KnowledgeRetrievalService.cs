@@ -143,10 +143,17 @@ public class KnowledgeRetrievalService : IKnowledgeRetrievalService
         return vector;
     }
 
+    // Latin words keep the original [a-z]+ rule so English scoring is unchanged. Tamil and
+    // Sinhala runs (letters plus combining marks; joiners removed so keyboard variants
+    // match) are kept as tokens too, for reviewed documents in those languages.
+    private static readonly Regex Words = new(@"[a-z]+|[஀-௿]+|[඀-෿]+",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     private static List<string> Tokenize(string text)
     {
-        var words = Regex.Matches(text.ToLowerInvariant(), "[a-z]+").Select(m => m.Value);
-        return words.Where(w => w.Length > 2 && !Stopwords.Contains(w)).ToList();
+        var key = Multilingual.Languages.MatchKey(text);
+        var words = Words.Matches(key).Select(m => m.Value);
+        return words.Where(w => (w[0] is >= 'a' and <= 'z' ? w.Length > 2 : w.Length > 1) && !Stopwords.Contains(w)).ToList();
     }
 
     // Cosine similarity compares the ANGLE between two vectors, not their
