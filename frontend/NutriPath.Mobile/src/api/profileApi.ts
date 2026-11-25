@@ -20,6 +20,8 @@ export interface ProfileResponse {
   dietaryPreferences: string[];
   // One of the fixed avatar IDs (constants/avatars.ts), or null if not chosen yet.
   avatarId: string | null;
+  // Only returned by GET /api/profile/me: true for administrator accounts.
+  isAdmin?: boolean;
 }
 
 export interface UpdateGoalsPayload {

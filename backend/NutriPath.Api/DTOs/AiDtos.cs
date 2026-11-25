@@ -16,7 +16,7 @@ public record KnowledgeSource(Guid Id, string Title, string Url);
 /// </summary>
 public record ChatResponse(string Answer, List<string> SourcesUsed, Guid ConversationId, AiUsageStatus? Usage = null,
     List<KnowledgeSource>? References = null, bool InsufficientEvidence = false,
-    string Language = "en", string? LanguageSource = null, string? Provider = null);
+    string Language = "en", string? LanguageSource = null, string? Provider = null, Guid? MessageId = null);
 
 /// <summary>The user's assistant allowance. ResetsAtUtc is set only while Locked.</summary>
 public record AiUsageStatus(int TokensUsed, int TokenLimit, int WindowHours, bool Locked, DateTime? ResetsAtUtc);

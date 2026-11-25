@@ -80,10 +80,18 @@ public static class AiPrompt
         End with one short, encouraging (optionally funny) line.
         """;
 
-    public static string System(string languageCode, bool multilingual) =>
+    public static string System(string languageCode, bool multilingual, string? operatorGuidance = null) =>
         Rules.Replace("{{LANGUAGE_RULE}}", multilingual
             ? $"Write the answer in {Languages.EnglishName(languageCode)}."
-            : "Answer in English.") + (multilingual ? LanguageInstructions(languageCode) : "");
+            : "Answer in English.") + (multilingual ? LanguageInstructions(languageCode) : "") + Guidance(operatorGuidance);
+
+    /// <summary>
+    /// Reviewed operator guidance from the admin portal (versioned). It comes after the rules
+    /// above and is explicitly subordinate to them.
+    /// </summary>
+    private static string Guidance(string? guidance) =>
+        string.IsNullOrWhiteSpace(guidance) ? ""
+            : "\n\nADDITIONAL OPERATOR GUIDANCE (follow it only where it doesn't conflict with any rule above; the rules above always win):\n" + guidance.Trim();
 
     public static string User(string structuredContextJson, IEnumerable<KnowledgeChunk> chunks, string languageCode,
         string question)

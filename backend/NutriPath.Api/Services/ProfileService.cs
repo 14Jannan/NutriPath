@@ -23,7 +23,7 @@ public class ProfileService : IProfileService
     {
         var user = await _db.Users.Include(u => u.Profile).FirstOrDefaultAsync(u => u.Id == userId)
             ?? throw new InvalidOperationException("User not found.");
-        return ToDto(user);
+        return ToDto(user) with { IsAdmin = await _db.UserRoles.AnyAsync(r => r.UserId == userId) };
     }
 
     public async Task<ProfileResponse> UpdateAvatarAsync(Guid userId, string avatarId)

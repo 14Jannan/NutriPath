@@ -27,6 +27,8 @@ public class AiService : IAiService
     // Chat text is private, so it's encrypted before it reaches the
     // database and decrypted only when shown to its owner or sent to the AI.
     private readonly IMessageProtector _protector;
+    private readonly Admin.RuntimeSettingsStore? _runtime;
+    private readonly Admin.PlatformSettingsStore? _platform;
 
     public AiService(
         IAiContextBuilder contextBuilder,
@@ -35,8 +37,11 @@ public class AiService : IAiService
         ILanguageResolver languages,
         IOptions<AiSettings> settings,
         NutriPathDbContext db,
-        IMessageProtector protector)
+        IMessageProtector protector,
+        Admin.RuntimeSettingsStore? runtime = null, Admin.PlatformSettingsStore? platform = null)
     {
+        _runtime = runtime;
+        _platform = platform;
         _contextBuilder = contextBuilder;
         _retrieval = retrieval;
         _providers = providers;
@@ -84,6 +89,7 @@ public class AiService : IAiService
     public async Task<ChatResponse> ChatAsync(Guid userId, string question, ClientClock clock, Guid? conversationId = null,
         string? language = null, CancellationToken cancellationToken = default)
     {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         // ---- Language: explicit request > chat selection > detection > saved preference > default ----
         var profile = await _db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId, cancellationToken);
         var resolved = _languages.Resolve(question, language, profile?.PreferredLanguage);
@@ -127,11 +133,13 @@ public class AiService : IAiService
         var structuredContextJson = await _contextBuilder.BuildContextAsync(userId, question, clock);
 
         // ---- 2. SEMANTIC retrieval: relevant knowledge, similarity search ----
+        var retrievalStarted = System.Diagnostics.Stopwatch.GetTimestamp();
         await _retrieval.EnsureIndexBuiltAsync();
         var relevantChunks = await _retrieval.SearchAsync(question);
+        var retrievalMs = (int)System.Diagnostics.Stopwatch.GetElapsedTime(retrievalStarted).TotalMilliseconds;
 
         // ---- 3. Build the grounded prompt (shared with the evaluation CLI) ----
-        var systemPrompt = AiPrompt.System(resolved.Code, _settings.Multilingual.Enabled);
+        var systemPrompt = AiPrompt.System(resolved.Code, _settings.Multilingual.Enabled, _platform?.Prompt.Doc.Guidance);
         var userPrompt = AiPrompt.User(structuredContextJson, relevantChunks, resolved.Code, question);
 
         // ---- 4. Call the model, with the conversation so far as memory ----
@@ -154,7 +162,7 @@ public class AiService : IAiService
             Role = AiMessageRole.User,
             Content = _protector.Protect(question),
         });
-        _db.AiMessages.Add(new AiMessage
+        var answerMessage = new AiMessage
         {
             ConversationId = conversation.Id,
             Role = AiMessageRole.Assistant,
@@ -173,15 +181,30 @@ public class AiService : IAiService
                 provider = reply.Provider,
                 model = reply.Model,
             })),
-        });
+        };
+        _db.AiMessages.Add(answerMessage);
+        // The model tried to promise allergy safety; the user got the safe fallback. Reviewers are told.
+        if (answer == GroundedNutritionAnswer.UnverifiedAllergySafety(resolved.Code))
+            Admin.QualityService.RaiseBlockedAllergyGuarantee(_db, resolved.Code, reply.Provider, reply.Model);
 
         _db.AiUsageRecords.Add(new AiUsageRecord { UserId = userId, Tokens = reply.TotalTokens });
+        // Operational metadata for the admin portal; no prompt or answer text.
+        _db.AiRequestMetrics.Add(new Models.Admin.AiRequestMetric
+        {
+            UserId = userId, Provider = reply.Provider, Model = reply.Model.Length > 60 ? reply.Model[..60] : reply.Model,
+            Language = resolved.Code, TotalTokens = reply.TotalTokens, InputTokens = reply.InputTokens, OutputTokens = reply.OutputTokens,
+            LatencyMs = (int)System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds, RetrievalMs = retrievalMs,
+            Outcome = "Success", ValidationPassed = grounded.Answer != GroundedNutritionAnswer.Unverified(resolved.Code) &&
+                grounded.Answer != GroundedNutritionAnswer.UnverifiedAllergySafety(resolved.Code),
+            Citations = grounded.References.Count, InsufficientEvidence = grounded.InsufficientEvidence,
+            ConfigVersion = _runtime?.Ai.Version ?? 0,
+        });
 
         await _db.SaveChangesAsync(cancellationToken);
 
         return new ChatResponse(answer, sources, conversation.Id,
             References: grounded.References, InsufficientEvidence: grounded.InsufficientEvidence,
-            Language: resolved.Code, LanguageSource: resolved.Source, Provider: reply.Provider);
+            Language: resolved.Code, LanguageSource: resolved.Source, Provider: reply.Provider, MessageId: answerMessage.Id);
     }
 
     public async Task<Guid> StartNewConversationAsync(Guid userId)

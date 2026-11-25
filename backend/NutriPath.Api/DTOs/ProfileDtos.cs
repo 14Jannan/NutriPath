@@ -23,7 +23,10 @@ public record ProfileResponse(
     int TargetCalories, int TargetProteinGrams, int TargetCarbsGrams, int TargetFatGrams, int TargetFiberGrams,
     List<string> Allergies, List<string> DietaryPreferences,
     // One of the fixed avatar IDs, or null if none chosen yet.
-    string? AvatarId);
+    string? AvatarId,
+    // True for administrator accounts. The mobile app then shows the
+    // "use the admin portal" screen instead of the consumer app.
+    bool IsAdmin = false);
 
 /// <summary>Sets the user's avatar; must be one of the fixed avatar IDs.</summary>
 public record UpdateAvatarRequest(string AvatarId);

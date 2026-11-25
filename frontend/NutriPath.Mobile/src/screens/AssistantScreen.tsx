@@ -29,6 +29,8 @@ import type { TFunction } from 'i18next';
 import '@/i18n';
 import { CHAT_LANGUAGES, useChatLanguage, type ChatLanguage } from '@/i18n/chatLanguage';
 import { scriptAwareStyle } from '@/utils/script';
+import { AnswerFeedback } from '@/components/AnswerFeedback';
+import { useAppStatus } from '@/hooks/useAppStatus';
 
 interface ChatMessage {
   id: string;
@@ -38,6 +40,8 @@ interface ChatMessage {
   failed?: boolean;
   references?: KnowledgeSource[];
   insufficientEvidence?: boolean;
+  // The saved answer's id on the server, for rating it.
+  serverId?: string;
 }
 
 // Sent in the chat's language, so the assistant replies in it too.
@@ -66,6 +70,7 @@ const fromHistory = (h: ChatHistoryMessage): ChatMessage => ({
   createdAt: parseUtc(h.createdAtUtc),
   references: h.references,
   insufficientEvidence: h.insufficientEvidence,
+  serverId: h.role.toLowerCase() === 'user' ? undefined : h.id,
 });
 
 const timeOf = (d: Date) => d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
@@ -101,6 +106,7 @@ function describeChatError(error: unknown, t: TFunction): string {
 
 export function AssistantScreen() {
   const { t } = useTranslation();
+  const { isEnabled } = useAppStatus();
   const { language, setLanguage } = useChatLanguage();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([welcome()]);
@@ -217,6 +223,7 @@ export function AssistantScreen() {
         {
           id: `local-${Date.now()}-a`, role: 'assistant', text: response.answer, createdAt: new Date(),
           references: response.references, insufficientEvidence: response.insufficientEvidence,
+          serverId: response.messageId,
         },
       ]);
     } catch (error) {
@@ -357,6 +364,9 @@ export function AssistantScreen() {
                           </>
                         )}
                       </View>
+                      {!isUser && !message.failed && message.serverId && isEnabled('assistant.feedback') && (
+                        <AnswerFeedback messageId={message.serverId} />
+                      )}
                       <Text style={styles.time}>{timeOf(message.createdAt)}</Text>
                     </View>
                   </View>

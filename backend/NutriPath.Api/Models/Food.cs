@@ -42,8 +42,21 @@ public class Food
     /// suggested: the shared catalog plus their own additions. Every Foods
     /// query that serves a user goes through this.
     /// </summary>
+    // Archived foods disappear from search, logging and AI suggestions. Past meal logs keep
+    // their nutrient snapshots, so archiving never changes historical totals.
     public static Expression<Func<Food, bool>> VisibleTo(Guid userId) =>
-        f => f.CreatedByUserId == null || f.CreatedByUserId == userId;
+        f => !f.IsArchived && (f.CreatedByUserId == null || f.CreatedByUserId == userId);
+
+    // Catalogue management (admin portal).
+    public bool IsArchived { get; set; }
+    // Reviewed by a nutrition reviewer; USDA sync will not overwrite it.
+    public bool IsVerified { get; set; }
+    [System.ComponentModel.DataAnnotations.MaxLength(60)]
+    public string? Category { get; set; }
+    [System.ComponentModel.DataAnnotations.MaxLength(200)]
+    public string? NameTamil { get; set; }
+    [System.ComponentModel.DataAnnotations.MaxLength(200)]
+    public string? NameSinhala { get; set; }
 
     public DateTime ImportedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime LastUpdatedAtUtc { get; set; } = DateTime.UtcNow;

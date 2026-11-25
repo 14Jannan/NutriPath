@@ -12,7 +12,8 @@ using NutriPath.Api.Models;
 using NutriPath.Api.Services;
 
 var knowledgeCommand = args.FirstOrDefault() == "knowledge";
-var builder = WebApplication.CreateBuilder(knowledgeCommand ? [] : args);
+var adminCommand = args.FirstOrDefault() == "admin";
+var builder = WebApplication.CreateBuilder(knowledgeCommand || adminCommand ? [] : args);
 
 // Render (and most cloud hosts) assign the port at runtime via PORT; Kestrel
 // won't pick it up on its own. Locally PORT is unset, so launchSettings.json
@@ -111,7 +112,7 @@ builder.Services.AddRateLimiter(options =>
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 5,
+                PermitLimit = builder.Configuration.GetValue("RateLimits:AuthPermitPerMinute", 5),
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0, // reject immediately, no queueing
             }));
@@ -149,10 +150,14 @@ builder.Services.AddScoped<IAiService>(sp => new AiService(
     sp.GetRequiredService<IKnowledgeRetrievalService>(),
     sp.GetRequiredService<NutriPath.Api.Services.Llm.ILlmProviderSelector>(),
     sp.GetRequiredService<NutriPath.Api.Services.Multilingual.ILanguageResolver>(),
-    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiSettings>>(),
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<AiSettings>>(),
     sp.GetRequiredService<NutriPathDbContext>(),
-    sp.GetRequiredService<IMessageProtector>()));
-builder.Services.AddScoped<IAiUsageService, AiUsageService>();
+    sp.GetRequiredService<IMessageProtector>(),
+    sp.GetRequiredService<NutriPath.Api.Services.Admin.RuntimeSettingsStore>(),
+    sp.GetRequiredService<NutriPath.Api.Services.Admin.PlatformSettingsStore>()));
+// Snapshot options: admin runtime settings apply on the next request without a restart.
+builder.Services.AddScoped<IAiUsageService>(sp => new AiUsageService(sp.GetRequiredService<NutriPathDbContext>(),
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<AiUsageSettings>>()));
 
 // Chat messages are encrypted at rest with this key. It lives in user
 // secrets (dev) or the Encryption__MessageKey environment variable (prod),
@@ -183,19 +188,56 @@ builder.Services.AddHttpClient<IUsdaFoodSyncService, UsdaFoodSyncService>();
 
 // Imports everyday foods on startup when the catalog is nearly empty.
 builder.Services.AddHostedService<StarterFoodCatalogSeeder>();
-builder.Services.AddHttpClient<IGroqClient, GroqClient>(client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpClient<IGroqClient, GroqClient>((HttpClient http, IServiceProvider sp) => new GroqClient(http,
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<GroqSettings>>(),
+        sp.GetRequiredService<ILogger<GroqClient>>(),
+        sp.GetRequiredService<NutriPath.Api.Services.Admin.IProviderCredentialStore>()))
+    .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(30));
 
 // Multilingual assistant: provider selection (with the Gemini free-tier privacy guard),
 // language resolution and one-request-at-a-time per user.
 builder.Services.Configure<AiSettings>(builder.Configuration.GetSection("AI"));
 builder.Services.Configure<GeminiSettings>(builder.Configuration.GetSection("Gemini"));
 builder.Services.AddSingleton<ChatRequestGate>();
-builder.Services.AddSingleton<NutriPath.Api.Services.Multilingual.ILanguageResolver,
-    NutriPath.Api.Services.Multilingual.LanguageResolver>();
+builder.Services.AddScoped<NutriPath.Api.Services.Multilingual.ILanguageResolver>(sp =>
+    new NutriPath.Api.Services.Multilingual.LanguageResolver(sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<AiSettings>>()));
 builder.Services.AddScoped<NutriPath.Api.Services.Llm.GroqLlmClient>();
 // Per-attempt timeouts and retries live in GeminiClient; this only bounds the whole call.
-builder.Services.AddHttpClient<NutriPath.Api.Services.Llm.GeminiClient>(client => client.Timeout = TimeSpan.FromSeconds(150));
-builder.Services.AddScoped<NutriPath.Api.Services.Llm.ILlmProviderSelector, NutriPath.Api.Services.Llm.LlmProviderSelector>();
+builder.Services.AddHttpClient<NutriPath.Api.Services.Llm.GeminiClient, NutriPath.Api.Services.Llm.GeminiClient>((HttpClient http, IServiceProvider sp) => new NutriPath.Api.Services.Llm.GeminiClient(http,
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<GeminiSettings>>(),
+        sp.GetRequiredService<ILogger<NutriPath.Api.Services.Llm.GeminiClient>>(),
+        sp.GetRequiredService<NutriPath.Api.Services.Admin.IProviderCredentialStore>()))
+    .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(150));
+builder.Services.AddScoped<NutriPath.Api.Services.Llm.ILlmProviderSelector>(sp => new NutriPath.Api.Services.Llm.LlmProviderSelector(
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<AiSettings>>(),
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<GeminiSettings>>(),
+    sp.GetRequiredService<NutriPathDbContext>(), sp));
+builder.Services.AddScoped<NutriPath.Api.Services.Llm.GroqLlmClient>(sp => new NutriPath.Api.Services.Llm.GroqLlmClient(
+    sp.GetRequiredService<IGroqClient>(), sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<GroqSettings>>()));
+
+// Runtime-managed provider keys and AI settings (admin portal).
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.IProviderCredentialStore, NutriPath.Api.Services.Admin.ProviderCredentialStore>();
+builder.Services.AddHttpClient<NutriPath.Api.Services.Admin.IProviderConnectionTester, NutriPath.Api.Services.Admin.ProviderConnectionTester>()
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.ProviderCredentialService>();
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.RuntimeSettingsStore>();
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.AiRuntimeOverrides>();
+builder.Services.AddSingleton<Microsoft.Extensions.Options.IPostConfigureOptions<AiSettings>>(sp => sp.GetRequiredService<NutriPath.Api.Services.Admin.AiRuntimeOverrides>());
+builder.Services.AddSingleton<Microsoft.Extensions.Options.IPostConfigureOptions<GeminiSettings>>(sp => sp.GetRequiredService<NutriPath.Api.Services.Admin.AiRuntimeOverrides>());
+builder.Services.AddSingleton<Microsoft.Extensions.Options.IPostConfigureOptions<GroqSettings>>(sp => sp.GetRequiredService<NutriPath.Api.Services.Admin.AiRuntimeOverrides>());
+builder.Services.AddSingleton<Microsoft.Extensions.Options.IPostConfigureOptions<AiUsageSettings>>(sp => sp.GetRequiredService<NutriPath.Api.Services.Admin.AiRuntimeOverrides>());
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.RuntimeSettingsService>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.KnowledgeAdminService>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.BackgroundJobs>();
+builder.Services.AddHostedService<NutriPath.Api.Services.Admin.BackgroundJobWorker>();
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.SystemHealth>();
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.PlatformSettingsStore>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.PlatformSettingsService>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.AdminNotifications>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.QualityService>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.TerminologyService>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.EvaluationService>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.DataRequestService>();
 
 builder.Services.AddDbContext<NutriPathDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
@@ -219,9 +261,33 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(30), // small tolerance for clock drift, not the full 5-minute .NET default
         };
+        // Suspended accounts and revoked sessions stop working on the next request.
+        options.Events = NutriPath.Api.Services.Admin.SecurityState.Events(admin: false);
+    })
+    // Admin portal tokens: separate audience, issued only after MFA, never valid for the consumer API.
+    .AddJwtBearer(NutriPath.Api.Services.Admin.AdminTokenService.AdminScheme, options =>
+    {
+        options.MapInboundClaims = false;
+        var parameters = NutriPath.Api.Services.Admin.AdminTokenService.Parameters(
+            jwtSettings, NutriPath.Api.Services.Admin.AdminTokenService.AdminAudience);
+        parameters.NameClaimType = System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub;
+        parameters.RoleClaimType = System.Security.Claims.ClaimTypes.Role;
+        options.TokenValidationParameters = parameters;
+        options.Events = NutriPath.Api.Services.Admin.SecurityState.Events(admin: true);
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(NutriPath.Api.Authorization.AdminPolicies.Add);
+
+// Admin portal services.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.SecurityState>();
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.AdminTokenService>();
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.ISecretProtector, NutriPath.Api.Services.Admin.AesGcmSecretProtector>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.AdminAudit>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.AdminAuthService>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.AdminCli>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.AccountControl>();
 
 var app = builder.Build();
 
@@ -237,6 +303,25 @@ if (knowledgeCommand)
         DbUpdateException or Npgsql.NpgsqlException or FormatException)
     {
         Console.Error.WriteLine($"Knowledge command failed ({ex.GetType().Name}).");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
+if (adminCommand)
+{
+    using var scope = app.Services.CreateScope();
+    try
+    {
+        await scope.ServiceProvider.GetRequiredService<NutriPath.Api.Services.Admin.AdminCli>().RunAsync(args[1..]);
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or DbUpdateException or
+        Npgsql.NpgsqlException)
+    {
+        // The message is ours (no secrets); database errors print only their type.
+        Console.Error.WriteLine(ex is ArgumentException or InvalidOperationException
+            ? $"Admin command failed: {ex.Message}"
+            : $"Admin command failed ({ex.GetType().Name}).");
         Environment.ExitCode = 1;
     }
     return;

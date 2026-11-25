@@ -6,7 +6,8 @@ FoodData Central and Open Food Facts plus a curated Sri Lankan food set.
 
 ## Structure
 
-- `frontend/` — Expo/React Native (TypeScript) app
+- `frontend/NutriPath.Mobile` — Expo/React Native (TypeScript) app
+- `frontend/NutriPath.Admin` — admin web portal (Vite, React, TypeScript)
 - `backend/` — ASP.NET Core Web API (.NET 10) + EF Core + PostgreSQL
 - `tests/` — xUnit unit and integration tests
 - `data/ingestion/` — food data sync scripts and seed files
@@ -19,6 +20,21 @@ Under active phase-by-phase development. See `docs/phase-0-architecture.md`.
 
 See [Nutrition assistant setup and evaluation](docs/ai-nutrition-phase1.md)
 for knowledge migration, trusted CLI commands, and local embeddings.
+
+## Admin portal
+
+`frontend/NutriPath.Admin` is the web portal for administrators: users, administrators and roles,
+AI providers, encrypted API keys, runtime AI configuration, prompt guidance, usage analytics, an
+AI playground, retrieval evaluations, answer feedback, safety incidents, the knowledge review
+workflow (with PDF import), terminology, embeddings, the food catalogue and USDA sync, background
+jobs, system health, feature flags, system settings, notifications, privacy requests and audit logs. Sign-in requires an authenticator app (TOTP).
+
+```bash
+cd frontend/NutriPath.Admin && npm ci && npm run dev   # proxies /api to http://localhost:5092
+cd backend/NutriPath.Api && dotnet run -- admin bootstrap   # first SuperAdmin
+```
+
+See [Admin portal](docs/admin-portal.md) for security, roles, API key encryption, setup and rollback.
 
 ## Multilingual assistant (English, Tamil, Sinhala)
 

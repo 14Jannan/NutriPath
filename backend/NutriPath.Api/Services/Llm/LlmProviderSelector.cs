@@ -50,6 +50,13 @@ public sealed class LlmProviderSelector(
         };
     }
 
+    private ILlmClient Resolve(string provider)
+    {
+        if (ai.Value.DisabledProviders.Contains(provider, StringComparer.OrdinalIgnoreCase))
+            throw new LlmProviderNotPermittedException($"{provider} is disabled by an administrator.");
+        return ResolveClient(provider);
+    }
+
     public async Task<bool> GeminiMayProcessAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var settings = gemini.Value;
@@ -71,7 +78,7 @@ public sealed class LlmProviderSelector(
             string.Equals(d.Trim().TrimStart('@'), domain, StringComparison.OrdinalIgnoreCase));
     }
 
-    private ILlmClient Resolve(string provider) => provider == AiSettings.Gemini
+    private ILlmClient ResolveClient(string provider) => provider == AiSettings.Gemini
         ? services.GetRequiredService<GeminiClient>()
         : services.GetRequiredService<GroqLlmClient>();
 

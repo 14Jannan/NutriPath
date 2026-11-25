@@ -26,6 +26,8 @@ public class JwtTokenService : IJwtTokenService
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            // Rejected once the account's stamp changes (suspension, session revocation).
+            new Claim(Admin.AdminTokenService.StampClaim, user.SecurityStamp),
         };
 
         var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Key));

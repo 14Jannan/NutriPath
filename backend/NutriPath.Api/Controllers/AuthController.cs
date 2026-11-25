@@ -52,13 +52,16 @@ public class AuthController(
         options.MaxAge = TimeSpan.FromDays(jwtSettings.Value.RefreshTokenDays);
         Response.Cookies.Append(RefreshCookie, session.RefreshToken, options);
         return Ok(new { session.AccessToken, session.AccessTokenExpiresAtUtc,
-            session.UserId, session.Email, session.FullName });
+            session.UserId, session.Email, session.FullName, session.IsAdmin });
     }
 
     /// <summary>Creates an account and emails a 6-digit verification code.</summary>
     [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request,
+        [FromServices] Services.Admin.PlatformSettingsStore platform)
     {
+        if (!platform.IsEnabled(Services.Admin.FeatureFlags.Registration))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "New registrations are paused. Please try again later." });
         try
         {
             await authService.RegisterAsync(request);

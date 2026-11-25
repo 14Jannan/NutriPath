@@ -49,6 +49,24 @@
       "today": "How am I doing today?",
       "weekly": "Give me my weekly summary",
       "streak": "What's my logging streak?"
+    },
+    "feedback": {
+      "helpful": "Helpful",
+      "notHelpful": "Not helpful",
+      "whatWrong": "What was wrong?",
+      "reasons": {
+        "Incorrect": "Incorrect",
+        "Unsafe": "Unsafe",
+        "WrongLanguage": "Wrong language",
+        "NotRelevant": "Not relevant",
+        "Other": "Other"
+      },
+      "commentPlaceholder": "Add details (optional)",
+      "send": "Send",
+      "cancel": "Cancel",
+      "thanks": "Thanks for your feedback",
+      "shareNote": "Sending feedback shares this question and answer with NutriPath reviewers.",
+      "error": "Couldn't send your feedback"
     }
   },
   "history": {

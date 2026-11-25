@@ -23,7 +23,11 @@ public class AiUsageService : IAiUsageService
 
     public async Task<AiUsageStatus> GetStatusAsync(Guid userId)
     {
-        var window = TimeSpan.FromHours(_settings.WindowHours);
+        // An administrator can override the allowance for one account.
+        var limitOverride = await _db.UserAiLimits.AsNoTracking().SingleOrDefaultAsync(l => l.UserId == userId);
+        var tokenLimit = limitOverride?.TokenLimit ?? _settings.TokenLimit;
+        var windowHours = limitOverride?.WindowHours ?? _settings.WindowHours;
+        var window = TimeSpan.FromHours(windowHours);
         var since = DateTime.UtcNow - window;
 
         var records = await _db.AiUsageRecords
@@ -33,7 +37,7 @@ public class AiUsageService : IAiUsageService
             .ToListAsync();
 
         var used = records.Sum(r => r.Tokens);
-        var locked = used >= _settings.TokenLimit;
+        var locked = used >= tokenLimit;
 
         // Locked until enough of the oldest replies age out of the window
         // to bring usage back under the limit.
@@ -44,7 +48,7 @@ public class AiUsageService : IAiUsageService
             foreach (var record in records)
             {
                 remaining -= record.Tokens;
-                if (remaining < _settings.TokenLimit)
+                if (remaining < tokenLimit)
                 {
                     resetsAt = record.CreatedAtUtc + window;
                     break;
@@ -52,6 +56,6 @@ public class AiUsageService : IAiUsageService
             }
         }
 
-        return new AiUsageStatus(used, _settings.TokenLimit, _settings.WindowHours, locked, resetsAt);
+        return new AiUsageStatus(used, tokenLimit, windowHours, locked, resetsAt);
     }
 }

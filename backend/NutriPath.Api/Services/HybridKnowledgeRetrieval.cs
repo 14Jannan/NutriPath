@@ -39,7 +39,7 @@ public sealed class HybridKnowledgeRetrieval(
                 // nothing and look like "no evidence", so treat the channel as unavailable.
                 if (!strict && await VectorCountAsync(embeddings.Model) == 0)
                     throw new InvalidOperationException("No vectors are indexed for the configured embedding model.");
-                var vectors = await embeddings.EmbedAsync([query], EmbeddingInputType.Query);
+                var vectors = await embeddings.EmbedAsync([SemanticQuery(query, questionLanguage)], EmbeddingInputType.Query);
                 semantic = await KnowledgeVectors.SearchAsync(db, vectors[0], embeddings.Model,
                     EmbeddingModels.MaxDistance(configuration, embeddings.Model,
                         crossLingual: questionLanguage != Multilingual.Languages.English), count);
@@ -72,6 +72,21 @@ public sealed class HybridKnowledgeRetrieval(
             if (selected.Count == topK) break;
         }
         return selected;
+    }
+
+    /// <summary>
+    /// The text embedded for semantic search. The multilingual model understands Tamil and
+    /// Sinhala script but not Tamil or Sinhala typed in English letters (Tanglish, Singlish),
+    /// so a romanised question is embedded together with its mapped English nutrition terms.
+    /// Script and English questions are embedded unchanged.
+    /// </summary>
+    public string SemanticQuery(string query, string questionLanguage)
+    {
+        if (questionLanguage == Multilingual.Languages.English || !Multilingual.Transliteration.IsRomanised(query) ||
+            !configuration.GetValue("Knowledge:TransliterationQueryExpansion", true))
+            return query;
+        var terms = Multilingual.NutritionTermLexicon.EnglishTermsFor(query);
+        return terms.Count == 0 ? query : $"{query} ({string.Join(", ", terms)})";
     }
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int Count, DateTime Until)>

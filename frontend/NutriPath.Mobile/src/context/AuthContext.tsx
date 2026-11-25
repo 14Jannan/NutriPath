@@ -18,6 +18,9 @@ interface AuthContextValue {
   profileStatus: ProfileStatus;
   // The name from sign-up, for a personal greeting during setup.
   fullName: string;
+  // Administrator accounts don't use the consumer app; they're shown a
+  // screen that points to the admin portal. Decided by the server.
+  isAdmin: boolean;
   loginUser: (email: string, password: string) => Promise<void>;
   logoutUser: () => Promise<void>;
   // Called once setup is saved, to let the user into the app.
@@ -34,11 +37,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loginRequired, setLoginRequired] = useState(false);
   const [profileStatus, setProfileStatus] = useState<ProfileStatus>('checking');
   const [fullName, setFullName] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const resetSession = useCallback(() => {
     setIsLoggedIn(false);
     setProfileStatus('checking');
     setFullName('');
+    setIsAdmin(false);
     void cancelMealReminders().catch(() => {});
   }, []);
 
@@ -49,6 +54,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const profile = await getMyProfile();
       if (version !== getSessionVersion()) return;
       setFullName(profile.fullName ?? '');
+      // Checked on every login and session restore, so a saved session or a
+      // notification can't open the consumer app for an admin account.
+      setIsAdmin(profile.isAdmin === true);
       // Targets are only calculated once the goals form has been saved.
       setProfileStatus(profile.targetCalories > 0 ? 'complete' : 'incomplete');
     } catch (error) {
@@ -90,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const auth = await authApi.login(email, password);
     setLoginRequired(true);
     setFullName(auth.fullName);
+    setIsAdmin(auth.isAdmin === true);
     setIsLoggedIn(true);
     await refreshProfileStatus();
   }
@@ -109,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginRequired,
         profileStatus,
         fullName,
+        isAdmin,
         loginUser,
         logoutUser,
         markProfileComplete,

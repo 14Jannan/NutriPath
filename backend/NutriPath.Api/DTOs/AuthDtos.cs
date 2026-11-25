@@ -14,4 +14,7 @@ public record AuthResponse(
     DateTime AccessTokenExpiresAtUtc,
     Guid UserId,
     string Email,
-    string FullName);
+    string FullName,
+    // True for administrator accounts: the mobile app shows the "Administrator Access"
+    // screen instead of the nutrition features. Grants no admin privileges.
+    bool IsAdmin = false);

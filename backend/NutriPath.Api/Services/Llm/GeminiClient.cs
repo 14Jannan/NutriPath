@@ -31,15 +31,18 @@ public sealed class GeminiClient : ILlmClient
     private readonly GeminiSettings _settings;
     private readonly ILogger<GeminiClient> _logger;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
+    private readonly Admin.IProviderCredentialStore? _credentials;
 
     [ActivatorUtilitiesConstructor]
-    public GeminiClient(HttpClient http, IOptions<GeminiSettings> settings, ILogger<GeminiClient> logger)
-        : this(http, settings, logger, Task.Delay) { }
+    public GeminiClient(HttpClient http, IOptions<GeminiSettings> settings, ILogger<GeminiClient> logger,
+        Admin.IProviderCredentialStore? credentials = null)
+        : this(http, settings, logger, Task.Delay, credentials) { }
 
     /// <summary>Test seam: <paramref name="delay"/> replaces Task.Delay between retries.</summary>
     public GeminiClient(HttpClient http, IOptions<GeminiSettings> settings, ILogger<GeminiClient> logger,
-        Func<TimeSpan, CancellationToken, Task> delay)
+        Func<TimeSpan, CancellationToken, Task> delay, Admin.IProviderCredentialStore? credentials = null)
     {
+        _credentials = credentials;
         _http = http;
         _settings = settings.Value;
         _logger = logger;
@@ -52,7 +55,11 @@ public sealed class GeminiClient : ILlmClient
 
     public async Task<LlmResponse> GenerateAsync(LlmRequest request, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_settings.ApiKey))
+        // Runtime-managed keys (admin portal) take precedence over deployment configuration.
+        var apiKey = _credentials is null
+            ? _settings.ApiKey
+            : await _credentials.GetActiveCredentialAsync(Admin.ExternalProviders.Gemini, cancellationToken);
+        if (string.IsNullOrWhiteSpace(apiKey))
             throw new HttpRequestException("Gemini is not configured.", null, HttpStatusCode.Unauthorized);
 
         var payload = JsonSerializer.Serialize(BuildBody(request, _settings), Json);
@@ -68,7 +75,7 @@ public sealed class GeminiClient : ILlmClient
             {
                 Content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json"),
             };
-            message.Headers.Add("x-goog-api-key", _settings.ApiKey);
+            message.Headers.Add("x-goog-api-key", apiKey);
 
             HttpResponseMessage response;
             try
@@ -158,7 +165,8 @@ public sealed class GeminiClient : ILlmClient
             text = "";
         }
         var tokens = result?.UsageMetadata?.TotalTokenCount ?? (promptChars + text.Length) / 4;
-        return new LlmResponse(text, tokens, Provider, result?.ModelVersion ?? Model);
+        return new LlmResponse(text, tokens, Provider, result?.ModelVersion ?? Model,
+            result?.UsageMetadata?.PromptTokenCount, result?.UsageMetadata?.CandidatesTokenCount);
     }
 
     public static TimeSpan Backoff(int attempt, TimeSpan max)
@@ -233,6 +241,7 @@ public sealed class GeminiClient : ILlmClient
     {
         [JsonPropertyName("totalTokenCount")] public int? TotalTokenCount { get; set; }
         [JsonPropertyName("candidatesTokenCount")] public int? CandidatesTokenCount { get; set; }
+        [JsonPropertyName("promptTokenCount")] public int? PromptTokenCount { get; set; }
         [JsonPropertyName("thoughtsTokenCount")] public int? ThoughtsTokenCount { get; set; }
     }
 

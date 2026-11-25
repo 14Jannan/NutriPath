@@ -90,6 +90,10 @@ public class AuthService : IAuthService
         if (!user.EmailVerified)
             throw new UnauthorizedAccessException("Please verify your email before logging in.");
 
+        if (user.IsSuspended)
+            throw new UnauthorizedAccessException("This account is suspended. Please contact NutriPath support.");
+
+        user.LastLoginAtUtc = DateTime.UtcNow;
         return await IssueTokensAsync(user);
     }
 
@@ -102,6 +106,9 @@ public class AuthService : IAuthService
 
         if (user.RefreshTokenExpiresAtUtc is not { } expiresAt || expiresAt <= DateTime.UtcNow)
             throw new UnauthorizedAccessException("Refresh token expired. Please log in again.");
+
+        if (user.IsSuspended)
+            throw new UnauthorizedAccessException("This account is suspended. Please contact NutriPath support.");
 
         // Rotation: issue a brand new refresh token and invalidate this
         // one, rather than reusing it. If a stolen refresh token is ever
@@ -185,13 +192,15 @@ public class AuthService : IAuthService
         user.RefreshTokenExpiresAtUtc = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenDays);
         await _db.SaveChangesAsync();
 
+        var isAdmin = await _db.UserRoles.AnyAsync(r => r.UserId == user.Id);
         return new AuthResponse(
             accessToken,
             refreshToken,
             expiresAtUtc,
             user.Id,
             user.Email,
-            user.Profile?.FullName ?? string.Empty);
+            user.Profile?.FullName ?? string.Empty,
+            isAdmin);
     }
 
     // Cryptographically secure: System.Random is predictable, and these
