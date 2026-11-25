@@ -30,7 +30,10 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // Pages are lazy chunks and dialogs animate; the first test to load a page can take a few seconds.
+    testTimeout: 20000,
   },
 });

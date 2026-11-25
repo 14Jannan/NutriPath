@@ -118,12 +118,14 @@ public sealed class AdminKnowledgeController(NutriPathDbContext db, KnowledgeAdm
     /// <summary>Parses an uploaded .txt, .md or .json file into draft fields for review before saving.</summary>
     [HttpPost("documents/import")]
     [AdminPermission(Permissions.KnowledgeCreate)]
-    [RequestSizeLimit(KnowledgeAdminService.MaxImportBytes + 64 * 1024)]
+    [RequestSizeLimit(KnowledgeAdminService.MaxPdfBytes + 64 * 1024)]
     public async Task<IActionResult> Import(IFormFile file, [FromForm] string? title, [FromForm] string? category,
         [FromForm] string? organization, [FromForm] string? sourceUrl, CancellationToken ct)
     {
         if (file is null || file.Length == 0) return BadRequest(new ProblemDetails { Status = 400, Title = "Choose a file." });
-        if (file.Length > KnowledgeAdminService.MaxImportBytes) return BadRequest(new ProblemDetails { Status = 400, Title = "Files must be at most 256 KB." });
+        var isPdf = Path.GetExtension(file.FileName).Equals(".pdf", StringComparison.OrdinalIgnoreCase);
+        if (file.Length > (isPdf ? KnowledgeAdminService.MaxPdfBytes : KnowledgeAdminService.MaxImportBytes))
+            return BadRequest(new ProblemDetails { Status = 400, Title = isPdf ? "PDF files must be at most 5 MB." : "Files must be at most 256 KB." });
         using var stream = new MemoryStream();
         await file.CopyToAsync(stream, ct);
         var parsed = KnowledgeAdminService.ParseUpload(file.FileName, stream.ToArray(),

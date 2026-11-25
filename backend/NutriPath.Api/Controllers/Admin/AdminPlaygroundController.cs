@@ -15,7 +15,7 @@ using NutriPath.Api.Services.Multilingual;
 namespace NutriPath.Api.Controllers.Admin;
 
 public sealed record PlaygroundRequest(string Question, string? Language, string? RetrievalMode, int TopK,
-    string? Profile, IReadOnlyList<string>? Providers, bool Generate = true);
+    string? Profile, IReadOnlyList<string>? Providers, bool Generate = true, string? PromptGuidance = null, bool UseDraftGuidance = false);
 
 /// <summary>
 /// Runs the real RAG pipeline step by step on a fictional profile: language resolution →
@@ -143,7 +143,17 @@ public sealed class AdminPlaygroundController(NutriPathDbContext db, HybridKnowl
 
         // 4. Prompt
         var context = JsonSerializer.Serialize(profile);
-        var system = AiPrompt.System(resolved.Code, true);
+        // A draft of the operator guidance can be tried here before it is saved.
+        string? guidance;
+        if (request.UseDraftGuidance)
+        {
+            var draft = new PromptSettingsDocument { Guidance = string.IsNullOrWhiteSpace(request.PromptGuidance) ? null : request.PromptGuidance.Trim() };
+            var problems = draft.Validate();
+            if (problems.Count > 0) return BadRequest(new ProblemDetails { Status = 400, Title = string.Join(" ", problems) });
+            guidance = draft.Guidance;
+        }
+        else guidance = HttpContext.RequestServices.GetRequiredService<PlatformSettingsStore>().Prompt.Doc.Guidance;
+        var system = AiPrompt.System(resolved.Code, true, guidance);
         var user = AiPrompt.User(context, chunks, resolved.Code, request.Question);
         steps.Add(new { step = "prompt", systemPromptCharacters = system.Length, userPromptCharacters = user.Length, systemPrompt = system, userPrompt = user });
 

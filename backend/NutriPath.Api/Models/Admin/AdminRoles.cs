@@ -48,6 +48,15 @@ public static class Permissions
     public const string SystemJobsManage = "system.jobs.manage";
     public const string AuditRead = "audit.read";
     public const string AuditExport = "audit.export";
+    public const string AiPromptsManage = "ai.prompts.manage";
+    public const string FeedbackRead = "feedback.read";
+    public const string FeedbackManage = "feedback.manage";
+    public const string SafetyRead = "safety.read";
+    public const string SafetyManage = "safety.manage";
+    public const string TerminologyManage = "terminology.manage";
+    public const string FeatureFlagsManage = "system.flags.manage";
+    public const string PrivacyRequestsRead = "privacy.requests.read";
+    public const string PrivacyRequestsManage = "privacy.requests.manage";
 
     public static readonly IReadOnlyList<string> All =
     [
@@ -55,7 +64,9 @@ public static class Permissions
         AdminsManage, AdminsAssignRoles, AiProvidersRead, AiProvidersManage, AiSecretsRotate, AiModelsManage,
         AiUsageRead, AiUsageManage, AiEvaluate, KnowledgeRead, KnowledgeCreate, KnowledgeEdit, KnowledgeReview,
         KnowledgeApprove, KnowledgeArchive, KnowledgeReindex, FoodsRead, FoodsManage, FoodsSync, SystemMonitor,
-        SystemSettingsManage, SystemJobsManage, AuditRead, AuditExport,
+        SystemSettingsManage, SystemJobsManage, AuditRead, AuditExport, AiPromptsManage, FeedbackRead,
+        FeedbackManage, SafetyRead, SafetyManage, TerminologyManage, FeatureFlagsManage, PrivacyRequestsRead,
+        PrivacyRequestsManage,
     ];
 
     /// <summary>
@@ -68,19 +79,20 @@ public static class Permissions
         [AdminRoles.UserAdmin] =
         [
             DashboardRead, UsersRead, UsersManage, UsersSuspend, UsersRevokeSessions, UsersExport, AiUsageRead,
-            AiUsageManage, AuditRead,
+            AiUsageManage, AuditRead, PrivacyRequestsRead, PrivacyRequestsManage,
         ],
         [AdminRoles.AIManager] =
         [
             DashboardRead, AiProvidersRead, AiProvidersManage, AiModelsManage, AiUsageRead, AiEvaluate,
             KnowledgeRead, KnowledgeCreate, KnowledgeEdit, KnowledgeReindex, SystemMonitor, SystemJobsManage,
+            AiPromptsManage, FeedbackRead, FeedbackManage, SafetyRead, SafetyManage, TerminologyManage,
         ],
         [AdminRoles.NutritionReviewer] =
         [
             DashboardRead, KnowledgeRead, KnowledgeReview, KnowledgeApprove, KnowledgeArchive, KnowledgeEdit,
-            FoodsRead, FoodsManage, FoodsSync,
+            FoodsRead, FoodsManage, FoodsSync, FeedbackRead, SafetyRead, SafetyManage, TerminologyManage,
         ],
-        [AdminRoles.SupportAdmin] = [DashboardRead, UsersRead],
+        [AdminRoles.SupportAdmin] = [DashboardRead, UsersRead, PrivacyRequestsRead],
     };
 
     public static IReadOnlySet<string> For(IEnumerable<string> roles) =>

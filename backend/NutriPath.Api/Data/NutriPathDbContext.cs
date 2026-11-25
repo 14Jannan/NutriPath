@@ -40,6 +40,13 @@ public class NutriPathDbContext : DbContext
     public DbSet<Models.Admin.AiRequestMetric> AiRequestMetrics => Set<Models.Admin.AiRequestMetric>();
     public DbSet<Models.Admin.UserAiLimit> UserAiLimits => Set<Models.Admin.UserAiLimit>();
     public DbSet<Models.Admin.BackgroundJob> BackgroundJobs => Set<Models.Admin.BackgroundJob>();
+    public DbSet<Models.Admin.AnswerFeedback> AnswerFeedback => Set<Models.Admin.AnswerFeedback>();
+    public DbSet<Models.Admin.SafetyIncident> SafetyIncidents => Set<Models.Admin.SafetyIncident>();
+    public DbSet<Models.Admin.AdminNotification> AdminNotifications => Set<Models.Admin.AdminNotification>();
+    public DbSet<Models.Admin.AdminNotificationRead> AdminNotificationReads => Set<Models.Admin.AdminNotificationRead>();
+    public DbSet<Models.Admin.NutritionTerm> NutritionTerms => Set<Models.Admin.NutritionTerm>();
+    public DbSet<Models.Admin.EvaluationRun> EvaluationRuns => Set<Models.Admin.EvaluationRun>();
+    public DbSet<Models.Admin.DataRequest> DataRequests => Set<Models.Admin.DataRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -136,6 +143,22 @@ public class NutriPathDbContext : DbContext
         b.Entity<Models.Admin.UserAiLimit>().HasOne<User>().WithOne().HasForeignKey<Models.Admin.UserAiLimit>(l => l.UserId).OnDelete(DeleteBehavior.Cascade);
 
         b.Entity<Models.Admin.BackgroundJob>().HasIndex(j => new { j.Status, j.CreatedAtUtc });
+
+        // Feedback holds a copy of the rated conversation, so it goes with the account.
+        b.Entity<Models.Admin.AnswerFeedback>().HasOne<User>().WithMany().HasForeignKey(f => f.UserId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<Models.Admin.AnswerFeedback>().HasIndex(f => new { f.UserId, f.MessageId }).IsUnique();
+        b.Entity<Models.Admin.AnswerFeedback>().HasIndex(f => new { f.Status, f.CreatedAtUtc });
+        b.Entity<Models.Admin.SafetyIncident>().HasIndex(i => new { i.Status, i.CreatedAtUtc });
+        b.Entity<Models.Admin.SafetyIncident>().HasOne<Models.Admin.AnswerFeedback>().WithMany().HasForeignKey(i => i.FeedbackId).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<Models.Admin.AdminNotification>().HasIndex(n => n.CreatedAtUtc);
+        b.Entity<Models.Admin.AdminNotificationRead>().HasKey(r => new { r.NotificationId, r.UserId });
+        b.Entity<Models.Admin.AdminNotificationRead>().HasOne<Models.Admin.AdminNotification>().WithMany().HasForeignKey(r => r.NotificationId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<Models.Admin.AdminNotificationRead>().HasOne<User>().WithMany().HasForeignKey(r => r.UserId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<Models.Admin.NutritionTerm>().HasIndex(t => t.Status);
+        b.Entity<Models.Admin.EvaluationRun>().HasIndex(r => r.CreatedAtUtc);
+        // No foreign key: a completed deletion request outlives the account it deleted.
+        b.Entity<Models.Admin.DataRequest>().HasIndex(r => new { r.Status, r.CreatedAtUtc });
+        b.Entity<Models.Admin.DataRequest>().HasIndex(r => r.UserId);
     }
 
 }

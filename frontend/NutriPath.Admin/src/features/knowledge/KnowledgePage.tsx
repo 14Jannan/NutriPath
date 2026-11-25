@@ -119,8 +119,8 @@ export function KnowledgeEditor({ initial, documentId, categories, onClose, onSa
       <div className="space-y-4">
         {!documentId && (
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border p-3 text-xs text-muted">
-            <Upload className="h-4 w-4" /> Import from a .txt, .md or .json file (max 256 KB) — PDF import is not supported.
-            <input ref={fileRef} type="file" accept=".txt,.md,.json,text/plain,text/markdown,application/json" className="hidden" onChange={(e) => {
+            <Upload className="h-4 w-4" /> Import from a PDF (text layer, max 5 MB) or a .txt, .md or .json file (max 256 KB). Check the extracted text before saving.
+            <input ref={fileRef} type="file" accept=".pdf,.txt,.md,.json,application/pdf,text/plain,text/markdown,application/json" className="hidden" onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) importFile.mutate(file, { onSuccess: (parsed) => set({ ...Object.fromEntries(Object.entries(parsed).filter(([, v]) => v !== null && v !== undefined)) }), onError: fail });
               e.target.value = '';

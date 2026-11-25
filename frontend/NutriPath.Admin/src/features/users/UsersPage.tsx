@@ -67,7 +67,7 @@ export default function UsersPage() {
               <option value="User">Consumers</option>
               {['SuperAdmin', 'UserAdmin', 'AIManager', 'NutritionReviewer', 'SupportAdmin'].map((r) => <option key={r} value={r}>{r}</option>)}
             </Select>
-            <Select aria-label="Language" value={filters.language} onChange={(e) => setFilters({ language: e.target.value })} className="w-36">
+            <Select aria-label="Language" value={filters.language} onChange={(e) => setFilters({ language: e.target.value })} className="w-40">
               <option value="">All languages</option>
               <option value="en">English</option>
               <option value="ta">Tamil</option>

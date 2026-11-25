@@ -24,9 +24,10 @@ for knowledge migration, trusted CLI commands, and local embeddings.
 ## Admin portal
 
 `frontend/NutriPath.Admin` is the web portal for administrators: users, administrators and roles,
-AI providers, encrypted API keys, runtime AI configuration, usage analytics, an AI playground,
-the knowledge review workflow, embeddings, the food catalogue and USDA sync, background jobs,
-system health and audit logs. Sign-in requires an authenticator app (TOTP).
+AI providers, encrypted API keys, runtime AI configuration, prompt guidance, usage analytics, an
+AI playground, retrieval evaluations, answer feedback, safety incidents, the knowledge review
+workflow (with PDF import), terminology, embeddings, the food catalogue and USDA sync, background
+jobs, system health, feature flags, system settings, notifications, privacy requests and audit logs. Sign-in requires an authenticator app (TOTP).
 
 ```bash
 cd frontend/NutriPath.Admin && npm ci && npm run dev   # proxies /api to http://localhost:5092

@@ -1,12 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Bell, ChevronsLeft, ChevronsRight, Laptop, LogOut, Menu, Moon, Search, Sun, UserCircle, X } from 'lucide-react';
+import { Bell, ChevronsLeft, ChevronsRight, Laptop, LogOut, Megaphone, Menu, Moon, Search, Sun, UserCircle, X } from 'lucide-react';
 import { useAuth } from '@/providers/auth';
 import { useTheme, type ThemeChoice } from '@/providers/theme';
 import { api } from '@/api/client';
-import type { ComponentHealth } from '@/api/types';
 import { navigation, titleFor } from '@/routes/nav';
 import { Button, Input, StatusDot } from '@/components/ui';
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from '@/components/overlays';
@@ -93,58 +92,82 @@ function ThemeMenu() {
   );
 }
 
-interface Overview {
-  health: ComponentHealth[];
-  pendingApprovals: { id: string; title: string; updatedAtUtc: string | null }[];
+interface NotificationFeed {
+  unread: number;
+  items: { id: string; type: string; title: string; body: string | null; link: string | null; tone: 'info' | 'warning' | 'danger'; createdAtUtc: string; read: boolean }[];
 }
 
-/** Real alerts only: degraded components and documents waiting for review. */
+/** Notifications raised by the server for events this administrator's roles can act on. */
 function NotificationCenter() {
-  const { can } = useAuth();
   const navigate = useNavigate();
+  const client = useQueryClient();
   const { data } = useQuery({
-    queryKey: ['dashboard-overview'],
-    queryFn: () => api<Overview>('/api/admin/dashboard/overview'),
-    enabled: can('dashboard.read'),
-    staleTime: 60_000,
+    queryKey: ['notifications'],
+    queryFn: () => api<NotificationFeed>('/api/admin/notifications'),
+    refetchInterval: 60_000,
   });
-  const alerts = data?.health.filter((h) => h.status !== 'Healthy') ?? [];
-  const pending = can('knowledge.read') ? data?.pendingApprovals ?? [] : [];
-  const count = alerts.length + pending.length;
+  const markAll = async () => {
+    await api('/api/admin/notifications/read', { method: 'POST' });
+    await client.invalidateQueries({ queryKey: ['notifications'] });
+  };
+  const open = async (item: NotificationFeed['items'][number]) => {
+    if (!item.read) {
+      await api(`/api/admin/notifications/${item.id}/read`, { method: 'POST' });
+      void client.invalidateQueries({ queryKey: ['notifications'] });
+    }
+    if (item.link) navigate(item.link);
+  };
+  const unread = data?.unread ?? 0;
   return (
     <DropdownMenu>
       <DropdownTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={`Notifications (${count})`} className="relative">
+        <Button variant="ghost" size="icon" aria-label={`Notifications (${unread} unread)`} className="relative">
           <Bell className="h-[18px] w-[18px]" />
-          {count > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-danger ring-2 ring-surface" />}
+          {unread > 0 && (
+            <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white ring-2 ring-surface">
+              {unread > 9 ? '9+' : unread}
+            </span>
+          )}
         </Button>
       </DropdownTrigger>
       <DropdownContent>
         <div className="w-80 max-w-[85vw]">
-          <DropdownLabel>Notifications</DropdownLabel>
-          {count === 0 && <p className="px-3 py-4 text-sm text-muted">Nothing needs your attention.</p>}
-          {alerts.map((a) => (
-            <DropdownItem key={a.name} onSelect={() => navigate('/health')}>
-              <StatusDot tone={a.status === 'Unavailable' ? 'danger' : 'warning'} />
-              <span className="min-w-0">
-                <span className="block text-sm">{a.name}: {a.status}</span>
-                {a.detail && <span className="block truncate text-xs text-muted">{a.detail}</span>}
-              </span>
-            </DropdownItem>
-          ))}
-          {pending.length > 0 && <DropdownSeparator />}
-          {pending.map((p) => (
-            <DropdownItem key={p.id} onSelect={() => navigate(`/knowledge/${p.id}`)}>
-              <StatusDot tone="info" />
-              <span className="min-w-0">
-                <span className="block truncate text-sm">Review: {p.title}</span>
-                <span className="block text-xs text-muted">Submitted {relative(p.updatedAtUtc)}</span>
-              </span>
-            </DropdownItem>
-          ))}
+          <div className="flex items-center justify-between pr-2">
+            <DropdownLabel>Notifications</DropdownLabel>
+            {unread > 0 && <button type="button" onClick={() => void markAll()} className="text-xs text-primary hover:underline cursor-pointer">Mark all read</button>}
+          </div>
+          {(data?.items.length ?? 0) === 0 && <p className="px-3 py-4 text-sm text-muted">Nothing needs your attention.</p>}
+          <div className="max-h-96 overflow-y-auto">
+            {data?.items.map((n) => (
+              <DropdownItem key={n.id} onSelect={() => void open(n)}>
+                <StatusDot tone={n.tone === 'danger' ? 'danger' : n.tone === 'warning' ? 'warning' : 'info'} />
+                <span className="min-w-0 flex-1">
+                  <span className={cn('block text-sm', !n.read && 'font-medium')}>{n.title}</span>
+                  {n.body && <span className="block truncate text-xs text-muted">{n.body}</span>}
+                  <span className="block text-[11px] text-muted">{relative(n.createdAtUtc)}</span>
+                </span>
+                {!n.read && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" aria-label="Unread" />}
+              </DropdownItem>
+            ))}
+          </div>
         </div>
       </DropdownContent>
     </DropdownMenu>
+  );
+}
+
+/** The maintenance notice set in System settings, also shown to app users. */
+function MaintenanceBanner() {
+  const { data } = useQuery({
+    queryKey: ['app-status'],
+    queryFn: () => api<{ maintenanceMessage: string | null }>('/api/app-status'),
+    staleTime: 60_000,
+  });
+  if (!data?.maintenanceMessage) return null;
+  return (
+    <div role="status" className="flex items-center gap-2 border-b border-border bg-warning-soft px-4 py-2 text-sm text-warning sm:px-6">
+      <Megaphone className="h-4 w-4 shrink-0" /> <span className="min-w-0">{data.maintenanceMessage}</span>
+    </div>
   );
 }
 
@@ -269,6 +292,7 @@ export function AdminLayout() {
             </DropdownContent>
           </DropdownMenu>
         </header>
+        <MaintenanceBanner />
         <main id="main" className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8">
           <Outlet />
         </main>

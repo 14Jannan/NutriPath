@@ -153,7 +153,8 @@ builder.Services.AddScoped<IAiService>(sp => new AiService(
     sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<AiSettings>>(),
     sp.GetRequiredService<NutriPathDbContext>(),
     sp.GetRequiredService<IMessageProtector>(),
-    sp.GetRequiredService<NutriPath.Api.Services.Admin.RuntimeSettingsStore>()));
+    sp.GetRequiredService<NutriPath.Api.Services.Admin.RuntimeSettingsStore>(),
+    sp.GetRequiredService<NutriPath.Api.Services.Admin.PlatformSettingsStore>()));
 // Snapshot options: admin runtime settings apply on the next request without a restart.
 builder.Services.AddScoped<IAiUsageService>(sp => new AiUsageService(sp.GetRequiredService<NutriPathDbContext>(),
     sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<AiUsageSettings>>()));
@@ -230,6 +231,13 @@ builder.Services.AddScoped<NutriPath.Api.Services.Admin.KnowledgeAdminService>()
 builder.Services.AddScoped<NutriPath.Api.Services.Admin.BackgroundJobs>();
 builder.Services.AddHostedService<NutriPath.Api.Services.Admin.BackgroundJobWorker>();
 builder.Services.AddSingleton<NutriPath.Api.Services.Admin.SystemHealth>();
+builder.Services.AddSingleton<NutriPath.Api.Services.Admin.PlatformSettingsStore>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.PlatformSettingsService>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.AdminNotifications>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.QualityService>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.TerminologyService>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.EvaluationService>();
+builder.Services.AddScoped<NutriPath.Api.Services.Admin.DataRequestService>();
 
 builder.Services.AddDbContext<NutriPathDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));

@@ -40,8 +40,13 @@ public class AiController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Chat([FromBody] ChatRequest request, [FromServices] ChatRequestGate gate,
-        [FromServices] Data.NutriPathDbContext db, [FromServices] Microsoft.Extensions.Options.IOptionsSnapshot<Models.AiSettings> ai)
+        [FromServices] Data.NutriPathDbContext db, [FromServices] Microsoft.Extensions.Options.IOptionsSnapshot<Models.AiSettings> ai,
+        [FromServices] Services.Admin.PlatformSettingsStore platform)
     {
+        // Emergency stop from the admin portal (Feature flags).
+        if (!platform.IsEnabled(Services.Admin.FeatureFlags.Assistant))
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new { message = "The assistant is temporarily unavailable. Please try again later." });
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
         // Failed requests are counted for the admin dashboard (no question text is stored).
         async Task RecordFailureAsync(Data.NutriPathDbContext context, string outcome, int? status)
@@ -145,6 +150,32 @@ public class AiController : ControllerBase
     [ProducesResponseType<List<ChatSearchResult>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Search([FromQuery] string q) =>
         Ok(await _aiService.SearchAsync(CurrentUserId, q ?? string.Empty));
+
+    /// <summary>Rates one of the user's assistant answers; "Unsafe" also opens a safety review.</summary>
+    /// <remarks>Sending feedback shares that question and answer with NutriPath's reviewers.</remarks>
+    [HttpPost("messages/{id:guid}/feedback")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Feedback(Guid id, [FromBody] Services.Admin.FeedbackRequest request,
+        [FromServices] Services.Admin.QualityService quality, [FromServices] Services.Admin.PlatformSettingsStore platform,
+        CancellationToken ct)
+    {
+        if (!platform.IsEnabled(Services.Admin.FeatureFlags.AssistantFeedback))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Feedback is turned off right now." });
+        try
+        {
+            await quality.SubmitAsync(CurrentUserId, id, request, ct);
+            return NoContent();
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { message = "Answer not found." });
+        }
+        catch (Services.Admin.AdminRuleException ex)
+        {
+            return StatusCode(ex.Status, new { message = ex.Message });
+        }
+    }
 
     /// <summary>Starts a new, empty conversation. Earlier ones stay in the history.</summary>
     [HttpPost("conversations")]

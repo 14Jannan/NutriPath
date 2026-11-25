@@ -17,8 +17,11 @@ public sealed class BackgroundJobs(NutriPathDbContext db, IServiceProvider servi
     public const string KnowledgeIndex = "knowledge.index";
     public const string KnowledgeReindexAll = "knowledge.reindex-all";
     public const string UsdaSync = "usda.sync";
+    public const string EvaluationRetrieval = "evaluation.retrieval";
+    public const string PrivacyExport = "privacy.export";
+    public const string Retention = "maintenance.retention";
     public const int MaxAttempts = 3;
-    public static readonly IReadOnlyList<string> Types = [KnowledgeIndex, KnowledgeReindexAll, UsdaSync];
+    public static readonly IReadOnlyList<string> Types = [KnowledgeIndex, KnowledgeReindexAll, UsdaSync, EvaluationRetrieval, PrivacyExport, Retention];
 
     public async Task<Guid> EnqueueAsync(string type, object payload, Guid? actor, CancellationToken ct)
     {
@@ -73,7 +76,13 @@ public sealed class BackgroundJobs(NutriPathDbContext db, IServiceProvider servi
                 InvalidOperationException e when e.Message.Length < 200 => e.Message,
                 _ => ex.GetType().Name,
             };
-            job.Status = job.Attempts < MaxAttempts && !job.CancelRequested ? "Queued" : "Failed";
+            job.Status = job.Attempts < MaxAttempts && !job.CancelRequested && job.Type != EvaluationRetrieval ? "Queued" : "Failed";
+            if (job.Status == "Failed")
+                db.AdminNotifications.Add(new AdminNotification
+                {
+                    Type = "job.failed", Title = $"Background job failed: {job.Type}", Body = job.Error, Link = "/jobs",
+                    Permission = Permissions.SystemMonitor, Tone = "danger",
+                });
         }
         job.FinishedAtUtc = job.Status is "Queued" ? null : DateTime.UtcNow;
         await db.SaveChangesAsync(CancellationToken.None);
@@ -109,6 +118,20 @@ public sealed class BackgroundJobs(NutriPathDbContext db, IServiceProvider servi
                 if (result.Status == SyncJobStatus.Failed) throw new AdminRuleException("USDA sync failed. See the sync history for details.");
                 return new { syncJobId = result.Id, result.RecordsFetched, result.RecordsInserted, result.RecordsUpdated, result.RecordsFailed };
             }
+            case EvaluationRetrieval:
+            {
+                var runId = payload.RootElement.GetProperty("runId").GetGuid();
+                return await services.GetRequiredService<EvaluationService>().ExecuteAsync(runId, async progress =>
+                {
+                    job.Progress = progress;
+                    await db.SaveChangesAsync(ct);
+                }, ct);
+            }
+            case PrivacyExport:
+                return await services.GetRequiredService<DataRequestService>()
+                    .BuildExportAsync(payload.RootElement.GetProperty("requestId").GetGuid(), ct);
+            case Retention:
+                return await RetentionAsync(ct);
             default:
                 throw new AdminRuleException($"Unknown job type {job.Type}.");
         }
@@ -130,6 +153,30 @@ public sealed class BackgroundJobs(NutriPathDbContext db, IServiceProvider servi
         }
     }
 
+    /// <summary>Deletes data older than the retention periods in System settings.</summary>
+    private async Task<object> RetentionAsync(CancellationToken ct)
+    {
+        var settings = services.GetRequiredService<PlatformSettingsStore>().System;
+        var now = DateTime.UtcNow;
+        var metricsCutoff = now.AddDays(-settings.MetricsRetentionDays);
+        var feedbackCutoff = now.AddDays(-settings.FeedbackRetentionDays);
+        var auditCutoff = now.AddDays(-settings.AuditRetentionDays);
+        var notificationCutoff = now.AddDays(-settings.NotificationRetentionDays);
+        var metrics = await db.AiRequestMetrics.CountAsync(m => m.AtUtc < metricsCutoff, ct);
+        await db.AiRequestMetrics.Where(m => m.AtUtc < metricsCutoff).ExecuteDeleteAsyncSafe(db, ct);
+        // Feedback still linked to an open safety incident is kept until the incident is closed.
+        var feedbackQuery = db.AnswerFeedback.Where(f => f.CreatedAtUtc < feedbackCutoff &&
+            !db.SafetyIncidents.Any(i => i.FeedbackId == f.Id && (i.Status == "Open" || i.Status == "Investigating")));
+        var feedback = await feedbackQuery.CountAsync(ct);
+        await feedbackQuery.ExecuteDeleteAsyncSafe(db, ct);
+        var audit = await db.AdminAuditLogs.CountAsync(a => a.AtUtc < auditCutoff, ct);
+        await db.AdminAuditLogs.Where(a => a.AtUtc < auditCutoff).ExecuteDeleteAsyncSafe(db, ct);
+        var notifications = await db.AdminNotifications.CountAsync(n => n.CreatedAtUtc < notificationCutoff, ct);
+        await db.AdminNotifications.Where(n => n.CreatedAtUtc < notificationCutoff).ExecuteDeleteAsyncSafe(db, ct);
+        var exports = await services.GetRequiredService<DataRequestService>().PurgeExpiredExportsAsync(ct);
+        return new { metrics, feedback, audit, notifications, exports };
+    }
+
     private static string Truncate(string value, int max) => value.Length <= max ? value : value[..max];
 }
 
@@ -140,11 +187,17 @@ public sealed class BackgroundJobWorker(IServiceScopeFactory scopes, IHostEnviro
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (environment.IsEnvironment("Testing")) return;
+        var lastHousekeeping = DateTime.MinValue;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 using var scope = scopes.CreateScope();
+                if (DateTime.UtcNow - lastHousekeeping > TimeSpan.FromMinutes(5))
+                {
+                    lastHousekeeping = DateTime.UtcNow;
+                    await HousekeepingAsync(scope.ServiceProvider, stoppingToken);
+                }
                 var jobs = scope.ServiceProvider.GetRequiredService<BackgroundJobs>();
                 if (await jobs.RunNextAsync(stoppingToken)) continue;
             }
@@ -154,5 +207,18 @@ public sealed class BackgroundJobWorker(IServiceScopeFactory scopes, IHostEnviro
             }
             await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
         }
+    }
+
+    /// <summary>
+    /// Reloads approved terminology (so every instance picks up changes) and queues the
+    /// retention job once a day.
+    /// </summary>
+    private static async Task HousekeepingAsync(IServiceProvider services, CancellationToken ct)
+    {
+        await services.GetRequiredService<TerminologyService>().RefreshAsync(ct);
+        var db = services.GetRequiredService<NutriPathDbContext>();
+        var since = DateTime.UtcNow.AddDays(-1);
+        if (!await db.BackgroundJobs.AnyAsync(j => j.Type == BackgroundJobs.Retention && j.CreatedAtUtc > since, ct))
+            await services.GetRequiredService<BackgroundJobs>().EnqueueAsync(BackgroundJobs.Retention, new { }, null, ct);
     }
 }

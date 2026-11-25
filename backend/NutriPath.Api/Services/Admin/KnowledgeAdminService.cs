@@ -22,6 +22,8 @@ public sealed class KnowledgeAdminService(NutriPathDbContext db, IConfiguration 
     BackgroundJobs jobs, IEmbeddingService embeddings)
 {
     public const int MaxImportBytes = 256 * 1024;
+    public const int MaxPdfBytes = 5 * 1024 * 1024;
+    public const int MaxPdfPages = 100;
 
     public KnowledgeDocument Validate(KnowledgeInput input) =>
         KnowledgeCli.Validate(new KnowledgeCli.ImportDocument(input.Title, input.Category, input.Organization,
@@ -122,6 +124,11 @@ public sealed class KnowledgeAdminService(NutriPathDbContext db, IConfiguration 
             throw new AdminRuleException("Only drafts and rejected documents can be submitted for review.");
         document.Status = KnowledgeStatus.PendingReview;
         document.UpdatedAtUtc = DateTime.UtcNow;
+        db.AdminNotifications.Add(new AdminNotification
+        {
+            Type = "knowledge.submitted", Title = $"Knowledge waiting for review: {document.Title}",
+            Permission = Permissions.KnowledgeReview, Link = $"/knowledge/{id}",
+        });
         await db.SaveChangesAsync(ct);
         await audit.WriteAsync("knowledge.submit", resourceType: "KnowledgeDocument", resourceId: id.ToString(), cancellationToken: ct);
     }
@@ -199,6 +206,8 @@ public sealed class KnowledgeAdminService(NutriPathDbContext db, IConfiguration 
     /// <summary>Parses an uploaded TXT, Markdown or JSON file into draft fields (not saved).</summary>
     public static KnowledgeInput ParseUpload(string fileName, byte[] bytes, KnowledgeInput metadata)
     {
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        if (extension == ".pdf") return metadata with { Content = ExtractPdfText(bytes) };
         if (bytes.Length == 0 || bytes.Length > MaxImportBytes) throw new AdminRuleException("Files must be 1 byte to 256 KB.", StatusCodes.Status400BadRequest);
         string text;
         try
@@ -209,7 +218,6 @@ public sealed class KnowledgeAdminService(NutriPathDbContext db, IConfiguration 
         {
             throw new AdminRuleException("The file is not UTF-8 text.", StatusCodes.Status400BadRequest);
         }
-        var extension = Path.GetExtension(fileName).ToLowerInvariant();
         switch (extension)
         {
             case ".txt" or ".md":
@@ -228,7 +236,34 @@ public sealed class KnowledgeAdminService(NutriPathDbContext db, IConfiguration 
                     throw new AdminRuleException("The JSON file is not valid.", StatusCodes.Status400BadRequest);
                 }
             default:
-                throw new AdminRuleException("Supported formats: .txt, .md and .json. (PDF import is not available yet.)", StatusCodes.Status400BadRequest);
+                throw new AdminRuleException("Supported formats: .txt, .md, .json and .pdf.", StatusCodes.Status400BadRequest);
+        }
+    }
+
+    /// <summary>
+    /// Extracts the text layer of a PDF (PdfPig, reading order). Scanned PDFs without a text layer
+    /// are rejected rather than guessed at: there is no OCR. The reviewer always checks the result.
+    /// </summary>
+    public static string ExtractPdfText(byte[] bytes)
+    {
+        if (bytes.Length is 0 or > MaxPdfBytes) throw new AdminRuleException("PDF files must be at most 5 MB.", StatusCodes.Status400BadRequest);
+        if (bytes.Length < 5 || Encoding.ASCII.GetString(bytes, 0, 5) != "%PDF-") throw new AdminRuleException("The file is not a PDF.", StatusCodes.Status400BadRequest);
+        try
+        {
+            using var pdf = UglyToad.PdfPig.PdfDocument.Open(bytes);
+            if (pdf.NumberOfPages > MaxPdfPages) throw new AdminRuleException($"PDFs can have at most {MaxPdfPages} pages.", StatusCodes.Status400BadRequest);
+            var pages = pdf.GetPages()
+                .Select(page => UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor.ContentOrderTextExtractor.GetText(page))
+                .Select(t => System.Text.RegularExpressions.Regex.Replace(t, @"[ \t]+", " ").Trim())
+                .Where(t => t.Length > 0);
+            var text = string.Join("\n\n", pages);
+            if (text.Length < 50) throw new AdminRuleException("No text was found in this PDF (scanned PDFs aren't supported).", StatusCodes.Status400BadRequest);
+            return text.Length > 200_000 ? text[..200_000] : text;
+        }
+        catch (Exception ex) when (ex is not AdminRuleException)
+        {
+            throw new AdminRuleException(ex.Message.Contains("password", StringComparison.OrdinalIgnoreCase)
+                ? "Password-protected PDFs aren't supported." : "The PDF could not be read.", StatusCodes.Status400BadRequest);
         }
     }
 

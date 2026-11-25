@@ -28,6 +28,15 @@ const JobsPage = lazy(() => import('@/features/operations/JobsPage'));
 const HealthPage = lazy(() => import('@/features/operations/HealthPage'));
 const AuditPage = lazy(() => import('@/features/audit/AuditPage'));
 const ProfilePage = lazy(() => import('@/features/profile/ProfilePage'));
+const PromptsPage = lazy(() => import('@/features/ai/PromptsPage'));
+const EvaluationsPage = lazy(() => import('@/features/ai/EvaluationsPage'));
+const FeedbackPage = lazy(() => import('@/features/quality/FeedbackPage'));
+const SafetyPage = lazy(() => import('@/features/quality/SafetyPage'));
+const SafetyDetailPage = lazy(() => import('@/features/quality/SafetyDetailPage'));
+const TerminologyPage = lazy(() => import('@/features/knowledge/TerminologyPage'));
+const FlagsPage = lazy(() => import('@/features/settings/FlagsPage'));
+const SystemSettingsPage = lazy(() => import('@/features/settings/SystemSettingsPage'));
+const PrivacyPage = lazy(() => import('@/features/privacy/PrivacyPage'));
 
 export function createQueryClient() {
   return new QueryClient({
@@ -72,6 +81,15 @@ export function AppRoutes() {
         <Route path="ai/configuration" element={page('ai.providers.read', <ConfigurationPage />)} />
         <Route path="ai/usage" element={page('ai.usage.read', <UsagePage />)} />
         <Route path="ai/playground" element={page('ai.evaluate', <PlaygroundPage />)} />
+        <Route path="ai/prompts" element={page('ai.providers.read', <PromptsPage />)} />
+        <Route path="ai/evaluations" element={page('ai.evaluate', <EvaluationsPage />)} />
+        <Route path="feedback" element={page('feedback.read', <FeedbackPage />)} />
+        <Route path="safety" element={page('safety.read', <SafetyPage />)} />
+        <Route path="safety/:id" element={page('safety.read', <SafetyDetailPage />)} />
+        <Route path="terminology" element={page('knowledge.read', <TerminologyPage />)} />
+        <Route path="settings/flags" element={page('system.monitor', <FlagsPage />)} />
+        <Route path="settings/system" element={page('system.monitor', <SystemSettingsPage />)} />
+        <Route path="privacy" element={page('privacy.requests.read', <PrivacyPage />)} />
         <Route path="knowledge" element={page('knowledge.read', <KnowledgePage />)} />
         <Route path="knowledge/:id" element={page('knowledge.read', <KnowledgeDetailPage />)} />
         <Route path="embeddings" element={page('knowledge.read', <EmbeddingsPage />)} />

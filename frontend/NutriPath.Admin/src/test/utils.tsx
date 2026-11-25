@@ -37,6 +37,8 @@ export const permissionsFor = {
     'admins.assign_roles', 'ai.providers.read', 'ai.providers.manage', 'ai.secrets.rotate', 'ai.models.manage', 'ai.usage.read', 'ai.usage.manage',
     'ai.evaluate', 'knowledge.read', 'knowledge.create', 'knowledge.edit', 'knowledge.review', 'knowledge.approve', 'knowledge.archive',
     'knowledge.reindex', 'foods.read', 'foods.manage', 'foods.sync', 'system.monitor', 'system.settings.manage', 'system.jobs.manage', 'audit.read', 'audit.export',
+    'ai.prompts.manage', 'feedback.read', 'feedback.manage', 'safety.read', 'safety.manage', 'terminology.manage', 'system.flags.manage',
+    'privacy.requests.read', 'privacy.requests.manage',
   ],
   SupportAdmin: ['dashboard.read', 'users.read'],
 };

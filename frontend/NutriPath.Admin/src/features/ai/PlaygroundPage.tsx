@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
+import { DRAFT_GUIDANCE_KEY } from './PromptsPage';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, ChevronDown, FlaskConical, Play, XCircle } from 'lucide-react';
 import { api } from '@/api/client';
@@ -96,7 +98,18 @@ export default function PlaygroundPage() {
   const [profile, setProfile] = useState('vegetarian-student');
   const [providers, setProviders] = useState<string[]>(['Gemini']);
   const [generate, setGenerate] = useState(true);
-  const run = useAction(() => api<RunResult>('/api/admin/playground/run', { body: { question, language: language || null, retrievalMode: mode, topK: Number(topK), profile, providers, generate } }));
+  const [params] = useSearchParams();
+  const [useDraft, setUseDraft] = useState(params.get('draftGuidance') === '1');
+  const [draft, setDraft] = useState(() => {
+    try {
+      return sessionStorage.getItem(DRAFT_GUIDANCE_KEY) ?? '';
+    } catch {
+      return '';
+    }
+  });
+  const run = useAction(() => api<RunResult>('/api/admin/playground/run', {
+    body: { question, language: language || null, retrievalMode: mode, topK: Number(topK), profile, providers, generate, useDraftGuidance: useDraft, promptGuidance: useDraft ? draft : null },
+  }));
   const result = run.data;
 
   return (
@@ -139,6 +152,10 @@ export default function PlaygroundPage() {
                 <input type="checkbox" className="h-4 w-4 accent-[var(--primary)]" disabled={!generate} checked={providers.includes(p)} onChange={(e) => setProviders(e.target.checked ? [...providers, p] : providers.filter((x) => x !== p))} />{p}
               </label>
             ))}
+          </fieldset>
+          <fieldset className="space-y-1.5">
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-[var(--primary)]" checked={useDraft} onChange={(e) => setUseDraft(e.target.checked)} />Use draft operator guidance (not saved)</label>
+            {useDraft && <Textarea aria-label="Draft guidance" rows={3} maxLength={2000} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Empty = no guidance" />}
           </fieldset>
           <Button className="w-full" loading={run.isPending} disabled={!question.trim() || (generate && providers.length === 0)} onClick={() => run.mutate(undefined)}>
             <Play className="h-4 w-4" /> Run pipeline

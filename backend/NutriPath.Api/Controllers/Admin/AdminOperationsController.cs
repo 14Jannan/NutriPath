@@ -199,6 +199,8 @@ public sealed class AdminOperationsController(NutriPathDbContext db, BackgroundJ
     public async Task<IActionResult> UsdaSync([FromBody] UsdaSyncRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Query) || request.Query.Length > 100) return BadRequest(new ProblemDetails { Status = 400, Title = "Enter a search term." });
+        if (!HttpContext.RequestServices.GetRequiredService<PlatformSettingsStore>().IsEnabled(FeatureFlags.UsdaSync))
+            return Conflict(new ProblemDetails { Status = 409, Title = "USDA imports are turned off in Feature flags." });
         var id = await jobs.EnqueueAsync(BackgroundJobs.UsdaSync, new { query = request.Query.Trim(), pageSize = Math.Clamp(request.PageSize, 1, 50) }, User.UserId(), ct);
         await audit.WriteAsync("usda.sync", resourceType: "BackgroundJob", resourceId: id.ToString(), summary: $"\"{request.Query.Trim()}\"", cancellationToken: ct);
         return Ok(new { jobId = id });

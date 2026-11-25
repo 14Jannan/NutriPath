@@ -74,11 +74,23 @@ public static class NutritionTermLexicon
         new("sambol", ["சம்பல்", "සම්බෝල"], ["sambol", "sambal", "sambola"]),
     ];
 
-    private static readonly (string English, string[] Native, HashSet<string> Transliterated)[] Prepared =
-        Entries.Select(e => (e.English,
-                e.Native.Select(Languages.MatchKey).Where(n => n.Length > 0).ToArray(),
-                e.Transliterated.Select(Transliteration.Key).ToHashSet()))
-            .ToArray();
+    private static readonly (string English, string[] Native, HashSet<string> Transliterated)[] BuiltIn =
+        Entries.Select(e => Prepare(e.English, e.Native, e.Transliterated)).ToArray();
+
+    // Built-in entries plus terms approved in the admin portal (replaced atomically on refresh).
+    private static volatile (string English, string[] Native, HashSet<string> Transliterated)[] Prepared = BuiltIn;
+
+    private static (string English, string[] Native, HashSet<string> Transliterated) Prepare(
+        string english, IEnumerable<string> native, IEnumerable<string> transliterated) =>
+        (english,
+            native.Select(Languages.MatchKey).Where(n => n.Length > 0).ToArray(),
+            transliterated.Select(Transliteration.Key).Where(t => t.Length > 0).ToHashSet());
+
+    /// <summary>Replaces the reviewed terms added in the admin portal. Built-in entries always stay.</summary>
+    public static void SetReviewedTerms(IEnumerable<(string English, string[] Native, string[] Transliterated)> terms) =>
+        Prepared = [.. BuiltIn, .. terms.Select(t => Prepare(t.English, t.Native, t.Transliterated))];
+
+    public static int BuiltInCount => BuiltIn.Length;
 
     /// <summary>English search terms for the Tamil, Sinhala or transliterated terms found in the text.</summary>
     public static IReadOnlyList<string> EnglishTermsFor(string text)

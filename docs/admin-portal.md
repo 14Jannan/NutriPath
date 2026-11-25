@@ -118,6 +118,15 @@ The matrix is defined in code (`Models/Admin/AdminRoles.cs`) and shown read-only
 | system.settings.manage | ✓ | | | | |
 | audit.read | ✓ | ✓ | | | |
 | audit.export | ✓ | | | | |
+| ai.prompts.manage | ✓ | | ✓ | | |
+| feedback.read | ✓ | | ✓ | ✓ | |
+| feedback.manage | ✓ | | ✓ | | |
+| safety.read, safety.manage, terminology.manage | ✓ | | ✓ | ✓ | |
+| system.flags.manage | ✓ | | | | |
+| privacy.requests.read | ✓ | ✓ | | | ✓ |
+| privacy.requests.manage | ✓ | ✓ | | | |
+
+SupportAdmin can't read feedback: the rated question and answer may contain health information.
 
 ## Knowledge workflow
 
@@ -135,7 +144,8 @@ stateDiagram-v2
 
 Only Approved documents are retrieved by the assistant. Approving queues an indexing job; approving
 a revision archives the version it supersedes. Content can be imported from `.txt`, `.md` or `.json`
-(max 256 KB). Chunks are previewed and duplicates detected before saving.
+(max 256 KB), or from a PDF's text layer (max 5 MB, 100 pages; scanned PDFs without text are
+rejected, there is no OCR). Chunks are previewed and duplicates detected before saving.
 
 ## Runtime AI configuration
 
@@ -177,19 +187,43 @@ so deep links and notifications can't open consumer screens. The portal URL come
 `EXPO_PUBLIC_ADMIN_PORTAL_URL` and must be HTTPS (plain HTTP is accepted only for local hosts in
 development builds).
 
+## Quality, safety and platform modules
+
+| Module | What it does | Where it takes effect |
+| --- | --- | --- |
+| **Answer feedback** | Users rate answers in the app (helpful / not helpful + reason + optional comment). Rating shares that question and answer with reviewers; the copy is encrypted with the chat key. The list shows metadata only; opening one decrypts it and is audited. | `POST /api/ai/messages/{id}/feedback` |
+| **Safety incidents** | Opened automatically when validation blocks an answer that guaranteed allergy safety, when a user reports an answer as unsafe, or by a reviewer. Severity, assignee, status; a written resolution is required to close. | Notifications to `safety.read` holders |
+| **Evaluations** | Retrieval benchmark runs over `docs/evaluation/nutrition-questions.json` and `multilingual-questions.json` (copied into the build). Recall, precision and MRR at k, per language, plus "no-evidence leakage" (questions that need no knowledge but still retrieved some). No model is called. | Background job `evaluation.retrieval` |
+| **Prompt guidance** | Versioned operator guidance appended after the built-in rules, which stay in code (`AiPrompt.cs`) and always win. Instructions to ignore the rules are refused. Can be tried as a draft in the playground before saving. Saving needs a recent second factor. | Every new assistant answer |
+| **Terminology** | Tamil, Sinhala and romanised terms mapped to English search terms, extending the built-in lexicon. A second reviewer approves each term; approved terms load at once and every instance reloads them every 5 minutes. | Keyword search for non-English questions |
+| **Feature flags** | Server-checked switches: assistant (emergency stop, 503), answer feedback, registrations, custom foods, in-app data requests, USDA imports. Versioned with rollback. | API, and the app via `GET /api/app-status` |
+| **System settings** | Maintenance message (shown in the app and portal), support email, retention periods for AI metrics, feedback, audit logs (≥ 365 days) and notifications, export expiry. A daily job applies retention. | `maintenance.retention` job |
+| **Notifications** | Raised for knowledge waiting for review, failed jobs, safety events and new privacy requests. Each is visible only to roles that can act on it; read state is per administrator. | Bell in the portal header |
+| **Privacy requests** | Users request a data export or account deletion in the app (Profile → Your data). Exports are built by a background job, encrypted, downloadable by the user only, and expire. Deletion removes the profile, meals, custom foods, conversations, feedback and usage, and keeps an anonymous record. Administrator accounts can't be deleted this way. Approving needs a recent second factor. | `/api/account/data-requests` |
+
+## Testing
+
+| Suite | Command | Needs |
+| --- | --- | --- |
+| Backend (xUnit) | `dotnet test tests/NutriPath.Api.Tests` | nothing (in-memory) |
+| Portal unit and component tests (Vitest) | `cd frontend/NutriPath.Admin && npm test` | nothing (mocked API) |
+| Mobile (Jest) | `cd frontend/NutriPath.Mobile && npm test` | nothing |
+| Portal end-to-end (Playwright) | `npx playwright install chromium`, then `npm run e2e` with `NUTRIPATH_E2E_EMAIL`, `NUTRIPATH_E2E_PASSWORD` and `NUTRIPATH_E2E_TOTP_SECRET` set | API on :5092 and `npm run dev` on :5173 |
+
+The end-to-end suite signs in with a real TOTP code, opens every module, checks no API call fails,
+and saves screenshots (light, dark and phone) to `frontend/NutriPath.Admin/e2e-screenshots/`.
+That folder is git-ignored because screenshots show real local data such as account emails.
+
 ## Rollback
 
 - **Frontend:** stop serving `frontend/NutriPath.Admin/dist`. Nothing else depends on it.
 - **Backend:** the migration is additive (new tables and nullable or defaulted columns). To roll back the code, deploy the previous build; the extra columns are ignored. To remove the schema, run `dotnet ef database update AddPreferredLanguage` (the previous migration) **after a backup**. This drops admin roles, sessions, audit logs, managed API keys and knowledge workflow metadata.
 - **API keys:** if a portal-managed key misbehaves, reactivate the previous version from **API keys**. Environment keys are not used again once a provider has portal-managed keys.
 
-## Not implemented yet
+## Known limitations
 
-These parts of the original specification are not built. The portal only lists modules that work.
-
-- PDF knowledge import (no stable, permissively licensed PDF parser chosen yet)
-- Evaluation runs UI, prompt version management, terminology (lexicon) management
-- Feedback review and safety incident queues (and the mobile feedback UI they need)
-- Notifications service, feature flags, general system settings page
-- Account deletion and data-export request workflows
-- Playwright end-to-end tests and screenshots
+- PDF import reads the text layer only; scanned PDFs need OCR elsewhere first.
+- Evaluations measure retrieval only. Answer quality is checked with the AI playground and the
+  `knowledge evaluate-llm` CLI, which call the model with synthetic data.
+- Terminology changes reach other API instances within 5 minutes (the reload interval).
+- Exports are delivered in the app; NutriPath doesn't email personal data.

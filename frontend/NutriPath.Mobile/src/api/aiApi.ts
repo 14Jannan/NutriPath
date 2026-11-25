@@ -34,6 +34,8 @@ export interface ChatResponse {
   languageSource?: string;
   // The AI provider that answered (Gemini or Groq).
   provider?: string;
+  // The saved answer's id, used to rate it.
+  messageId?: string;
 }
 
 export interface ChatHistoryMessage {
@@ -123,4 +125,11 @@ export async function startNewConversation(): Promise<string> {
 
 export async function deleteConversation(conversationId: string): Promise<void> {
   await apiClient.delete(`/api/ai/conversations/${conversationId}`);
+}
+
+export type FeedbackReason = 'Incorrect' | 'Unsafe' | 'WrongLanguage' | 'NotRelevant' | 'MissingSources' | 'Other';
+
+/** Rates an answer. Sending feedback shares that question and answer with NutriPath's reviewers. */
+export async function sendFeedback(messageId: string, helpful: boolean, reason?: FeedbackReason, comment?: string): Promise<void> {
+  await apiClient.post(`/api/ai/messages/${messageId}/feedback`, { helpful, reason, comment: comment?.trim() || undefined });
 }

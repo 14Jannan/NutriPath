@@ -17,8 +17,10 @@ jest.mock('@/api/aiApi', () => ({
   startNewConversation: jest.fn(),
   deleteConversation: jest.fn(),
   getUsage: jest.fn(),
+  sendFeedback: jest.fn(),
 }));
 const api = jest.mocked(aiApi);
+jest.mock('@/hooks/useAppStatus', () => ({ useAppStatus: () => ({ status: null, isEnabled: () => true }) }));
 
 const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, left: 0, right: 0, bottom: 34 } };
 const now = new Date().toISOString();
@@ -106,6 +108,26 @@ describe('AssistantScreen', () => {
     } finally {
       link.mockRestore();
     }
+  });
+
+  it('lets the user rate an answer and say what was wrong', async () => {
+    api.askAssistant.mockResolvedValueOnce({ answer: 'Peanuts are fine for you.', sourcesUsed: [], conversationId: 'c2', usage, messageId: 'answer-1' });
+    api.sendFeedback.mockResolvedValue(undefined);
+    await renderScreen();
+    await fireEvent.changeText(screen.getByPlaceholderText('Ask NutriPath anything...'), 'Can I eat peanuts?');
+    await fireEvent.press(screen.getByLabelText('Send'));
+    await screen.findByText('Peanuts are fine for you.');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Not helpful' }));
+    expect(screen.getByText(/shares this question and answer/)).toBeTruthy();
+    const send = screen.getByRole('button', { name: 'Send' });
+    expect(send).toBeDisabled(); // a reason is required
+    await fireEvent.press(screen.getByRole('radio', { name: 'Unsafe' }));
+    await fireEvent.changeText(screen.getByLabelText('Add details (optional)'), 'I am allergic');
+    await fireEvent.press(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(api.sendFeedback).toHaveBeenCalledWith('answer-1', false, 'Unsafe', 'I am allergic'));
+    expect(await screen.findByText('Thanks for your feedback')).toBeTruthy();
   });
 
   it('starts each session on a fresh chat, created with the first message', async () => {

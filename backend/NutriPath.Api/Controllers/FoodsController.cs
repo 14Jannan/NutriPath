@@ -61,8 +61,11 @@ public class FoodsController : ControllerBase
     [HttpPost]
     [ProducesResponseType<FoodSearchResultDto>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create([FromBody] CreateFoodRequest request)
+    public async Task<IActionResult> Create([FromBody] CreateFoodRequest request,
+        [FromServices] Services.Admin.PlatformSettingsStore platform)
     {
+        if (!platform.IsEnabled(Services.Admin.FeatureFlags.CustomFoods))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Adding your own foods is turned off right now." });
         try
         {
             return Ok(await _foodSearch.CreateCustomAsync(CurrentUserId, request));

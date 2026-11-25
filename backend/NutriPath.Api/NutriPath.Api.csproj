@@ -21,14 +21,19 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.15" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="Data\Seed\knowledge-base.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Data\Seed\reviewed-knowledge.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Data\Seed\sri-lankan-foods.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Benchmark question sets used by admin-portal evaluation runs (same files as the CLI). -->
+    <None Include="..\..\docs\evaluation\nutrition-questions.json" Link="Data\Evaluation\nutrition-questions.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\evaluation\multilingual-questions.json" Link="Data\Evaluation\multilingual-questions.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

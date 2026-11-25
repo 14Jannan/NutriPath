@@ -1,6 +1,7 @@
 import {
-  Activity, BarChart3, BookOpenCheck, Boxes, Cpu, Database, FlaskConical, Gauge, KeyRound, LayoutDashboard,
-  ListChecks, ScrollText, ShieldCheck, SlidersHorizontal, UserCircle, Users, UtensilsCrossed, Wheat, type LucideIcon,
+  Activity, BarChart3, BookOpenCheck, Boxes, Cpu, Database, FileLock2, FlaskConical, Gauge, KeyRound, Languages, LayoutDashboard,
+  ListChecks, MessageSquareText, ScrollText, Settings2, ShieldAlert, ShieldCheck, SlidersHorizontal, Target, ThumbsUp, ToggleRight,
+  UserCircle, Users, UtensilsCrossed, Wheat, type LucideIcon,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -34,7 +35,16 @@ export const navigation: NavGroup[] = [
       { to: '/ai/keys', label: 'API keys', icon: KeyRound, permission: 'ai.providers.read' },
       { to: '/ai/configuration', label: 'AI configuration', icon: SlidersHorizontal, permission: 'ai.providers.read' },
       { to: '/ai/usage', label: 'AI usage', icon: BarChart3, permission: 'ai.usage.read' },
+      { to: '/ai/prompts', label: 'Prompt guidance', icon: MessageSquareText, permission: 'ai.providers.read' },
       { to: '/ai/playground', label: 'AI playground', icon: FlaskConical, permission: 'ai.evaluate' },
+      { to: '/ai/evaluations', label: 'Evaluations', icon: Target, permission: 'ai.evaluate' },
+    ],
+  },
+  {
+    label: 'Quality & safety',
+    items: [
+      { to: '/feedback', label: 'Answer feedback', icon: ThumbsUp, permission: 'feedback.read' },
+      { to: '/safety', label: 'Safety incidents', icon: ShieldAlert, permission: 'safety.read' },
     ],
   },
   {
@@ -42,6 +52,7 @@ export const navigation: NavGroup[] = [
     items: [
       { to: '/knowledge', label: 'Knowledge base', icon: BookOpenCheck, permission: 'knowledge.read' },
       { to: '/embeddings', label: 'Embeddings', icon: Boxes, permission: 'knowledge.read' },
+      { to: '/terminology', label: 'Terminology', icon: Languages, permission: 'knowledge.read' },
       { to: '/foods', label: 'Food catalogue', icon: UtensilsCrossed, permission: 'foods.read' },
       { to: '/foods/usda', label: 'USDA sync', icon: Wheat, permission: 'foods.read' },
     ],
@@ -51,11 +62,14 @@ export const navigation: NavGroup[] = [
     items: [
       { to: '/jobs', label: 'Background jobs', icon: Database, permission: 'system.monitor' },
       { to: '/health', label: 'System health', icon: Activity, permission: 'system.monitor' },
+      { to: '/settings/flags', label: 'Feature flags', icon: ToggleRight, permission: 'system.monitor' },
+      { to: '/settings/system', label: 'System settings', icon: Settings2, permission: 'system.monitor' },
     ],
   },
   {
     label: 'Administration',
     items: [
+      { to: '/privacy', label: 'Privacy requests', icon: FileLock2, permission: 'privacy.requests.read' },
       { to: '/audit', label: 'Audit logs', icon: ScrollText, permission: 'audit.read' },
       { to: '/profile', label: 'My profile', icon: UserCircle },
     ],

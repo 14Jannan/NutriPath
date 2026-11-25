@@ -3,7 +3,7 @@ import * as tokenStorage from './tokenStorage';
 
 export { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from './tokenStorage';
 const { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } = tokenStorage;
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:5092').replace(/\/$/, '');
+export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:5092').replace(/\/$/, '');
 
 function requireSecureApiUrl() {
   if (!__DEV__ && !API_BASE_URL.startsWith('https://'))
