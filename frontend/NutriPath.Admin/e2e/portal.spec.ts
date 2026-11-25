@@ -42,7 +42,16 @@ async function signIn(page: Page) {
   await page.goto('/login');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Continue' }).click();
+  // Sign-in allows 5 attempts a minute per IP; wait the limit out instead of failing.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.getByRole('button', { name: 'Continue' }).click();
+    const outcome = await Promise.race([
+      page.getByLabel('Authenticator code').waitFor().then(() => 'mfa' as const),
+      page.getByText('Too many requests').waitFor().then(() => 'limited' as const),
+    ]);
+    if (outcome === 'mfa') break;
+    await page.waitForTimeout(61_000);
+  }
   await page.getByLabel('Authenticator code').fill(await freshCode(used));
   await page.getByRole('button', { name: /verify/i }).click();
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 30_000 });

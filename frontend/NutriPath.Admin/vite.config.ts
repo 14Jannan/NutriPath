@@ -16,18 +16,9 @@ export default defineConfig({
     port: 5173,
     proxy: { '/api': { target: apiTarget, changeOrigin: false } },
   },
-  build: {
-    sourcemap: false,
-    rollupOptions: {
-      output: {
-        manualChunks(id: string) {
-          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-')) return 'charts';
-          if (/node_modules\/(react|react-dom|react-router|scheduler|@tanstack)\//.test(id)) return 'vendor';
-          return undefined;
-        },
-      },
-    },
-  },
+  // No manualChunks: Vite 8 also applies it to dev dependency pre-bundling, where it split React
+  // into two copies ("Invalid hook call"). Pages are lazy-loaded, so default chunking is enough.
+  build: { sourcemap: false },
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
